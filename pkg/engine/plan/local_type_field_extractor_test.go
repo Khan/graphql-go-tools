@@ -208,19 +208,10 @@ func TestLocalTypeFieldExtractor_GetAllNodes(t *testing.T) {
 				{TypeName: "Query", FieldNames: []string{"communication", "me", "user"}},
 			},
 			[]TypeField{
+				{TypeName: "Comment", FieldNames: []string{"comment", "id", "user"}},
 				{TypeName: "Communication", FieldNames: []string{"comment", "id", "user"}},
+				{TypeName: "Review", FieldNames: []string{"comment", "id", "rating", "user"}},
 				{TypeName: "User", FieldNames: []string{"communications", "id"}},
-				// Bug: The concrete types that implement an interface should
-				// also be included as child nodes. This is because the
-				// "enclosing type" of a concrete fragment spread will be the
-				// concrete type. The planer needs to know the fields
-				// associated with these types even when the types are only
-				// connected to a root node via an interface.
-				//
-				// Uncomment these lines once the bug is fixed.
-				//
-				// {TypeName: "Comment", FieldNames: []string{"comment", "id", "user"}},
-				// {TypeName: "Review", FieldNames: []string{"comment", "id", "rating", "user"}},jjj
 			})
 	})
 	t.Run("interface with key directive", func(t *testing.T) {
@@ -264,14 +255,10 @@ func TestLocalTypeFieldExtractor_GetAllNodes(t *testing.T) {
 				{TypeName: "Review", FieldNames: []string{"comment", "id", "rating", "user"}},
 			},
 			[]TypeField{
+				{TypeName: "Comment", FieldNames: []string{"comment", "id", "user"}},
 				{TypeName: "Communication", FieldNames: []string{"comment", "id", "user"}},
+				{TypeName: "Review", FieldNames: []string{"comment", "id", "rating", "user"}},
 				{TypeName: "User", FieldNames: []string{"communications", "id"}},
-				// Bug: The concrete types that implement an interface should
-				// also be included. Uncomment these lines once the bug is
-				// fixed.
-				//
-				// {TypeName: "Comment", FieldNames: []string{"comment", "id", "user"}},
-				// {TypeName: "Review", FieldNames: []string{"comment", "id", "rating", "user"}},
 			})
 	})
 	t.Run("extended interface", func(t *testing.T) {
@@ -312,24 +299,13 @@ func TestLocalTypeFieldExtractor_GetAllNodes(t *testing.T) {
 				{TypeName: "Review", FieldNames: []string{"comment", "rating", "user"}},
 			},
 			[]TypeField{
+				{TypeName: "Comment", FieldNames: []string{"comment", "id", "user"}},
 				{TypeName: "Communication", FieldNames: []string{"comment", "id", "user"}},
+				{TypeName: "Review", FieldNames: []string{"comment", "id", "rating", "user"}},
 				{TypeName: "User", FieldNames: []string{"communications", "id"}},
-				// Bug: The concrete types that implement an interface should
-				// also be included. Uncomment these lines once the bug is
-				// fixed.
-				//
-				// {TypeName: "Comment", FieldNames: []string{"comment", "id", "user"}},
-				// {TypeName: "Review", FieldNames: []string{"comment", "id", "rating", "user"}},
 			})
 	})
 	t.Run("union", func(t *testing.T) {
-		// Union members should be included as child nodes, but they currently
-		// aren't. Note that union types themselves need no be included because
-		// a selection on a union type MUST use concrete fragment spreads.
-		//
-		// Un-skip this test once they are.
-		t.Skip()
-
 		run(t, `
 			extend type Query {
 				me: User
@@ -367,10 +343,6 @@ func TestLocalTypeFieldExtractor_GetAllNodes(t *testing.T) {
 			})
 	})
 	t.Run("extended union", func(t *testing.T) {
-		// Union members should be included as child nodes, but they currently
-		// aren't. Un-skip this test once they are.
-		t.Skip()
-
 		run(t, `
 			extend type Query {
 				me: User
@@ -528,10 +500,6 @@ func TestLocalTypeFieldExtractor_GetAllNodes(t *testing.T) {
 			})
 	})
 	t.Run("local type extension", func(t *testing.T) {
-		// The existing LocalTypeFieldExtractor can't handle local type
-		// extensions. Un-skip this test once it can.
-		t.Skip()
-
 		run(t, `
            extend type Query {
                    reviews(IDs: [ID!]!): [Review!]
@@ -576,10 +544,6 @@ func TestLocalTypeFieldExtractor_GetAllNodes(t *testing.T) {
 			})
 	})
 	t.Run("local type extension defined before local type", func(t *testing.T) {
-		// The existing LocalTypeFieldExtractor can't handle local type
-		// extensions. Un-skip this test once it can.
-		t.Skip()
-
 		run(t, `
            extend type Query {
                    reviews(IDs: [ID!]!): [Review!]
