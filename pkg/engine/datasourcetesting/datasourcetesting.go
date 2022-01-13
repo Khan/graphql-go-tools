@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
+	"github.com/google/go-cmp/cmp"
 
 	"github.com/jensneuse/graphql-go-tools/internal/pkg/unsafeparser"
 	"github.com/jensneuse/graphql-go-tools/pkg/ast"
@@ -54,12 +54,17 @@ func RunTest(definition, operation, operationName string, expectedPlan plan.Plan
 		expectedBytes, _ := json.MarshalIndent(expectedPlan, "", "  ")
 
 		if string(expectedBytes) != string(actualBytes) {
-			assert.Equal(t, expectedPlan, actualPlan)
+			// DO NOT MERGE!!!
+			//
+			// When using assert.Equal, the max depth is reached when comparing
+			// objects in graphql_datasource_test.go so the difference is
+			// sometimes not printed. This uses go-cmp instead so differences
+			// at arbitrary depths are visible.
+			t.Error(cmp.Diff(string(expectedBytes), string(actualBytes)))
 		}
 
 		for _, extraCheck := range extraChecks {
 			extraCheck(t, op, actualPlan)
 		}
-
 	}
 }
