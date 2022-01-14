@@ -3050,6 +3050,10 @@ func TestGraphQLDataSource(t *testing.T) {
 												Renderer: resolve.NewJSONVariableRendererWithValidation(`{"type":"string"}`),
 											},
 											&resolve.ContextVariable{
+												Path:     []string{"someSkipCondition"},
+												Renderer: resolve.NewJSONVariableRendererWithValidation(`{"type":"boolean"}`),
+											},
+											&resolve.ContextVariable{
 												Path:     []string{"publicOnly"},
 												Renderer: resolve.NewJSONVariableRendererWithValidation(`{"type":"boolean"}`),
 											},
