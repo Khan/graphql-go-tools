@@ -411,7 +411,7 @@ func (p *Planner) EnterField(ref int) {
 
 	typeName := p.lastFieldEnclosingTypeName
 
-	fieldConfiguration := p.visitor.Config.Fields.ForTypeField(typeName, fieldName)
+	fieldConfiguration := p.visitor.Config.Fields.ForTypeField(p.visitor.Walker.EnclosingTypeDefinition, p.visitor.Definition, typeName, fieldName)
 	if fieldConfiguration == nil {
 		p.addField(ref)
 		return
@@ -511,7 +511,7 @@ func (p *Planner) handleFederation(fieldConfig *plan.FieldConfiguration) {
 	// query($representations: [_Any!]!){_entities(representations: $representations){... on Product
 	p.addRepresentationsVariableDefinition()     // $representations: [_Any!]!
 	p.addEntitiesSelectionSet()                  // {_entities(representations: $representations)
-	p.addOneTypeInlineFragment()                 // ... on Product
+	p.addOnTypeInlineFragments()                 // ... on Product
 	p.updateRepresentationsVariable(fieldConfig) // "variables\":{\"representations\":[{\"upc\":\"$$0$$\",\"__typename\":\"Product\"}]}}
 }
 
@@ -537,7 +537,26 @@ func (p *Planner) updateRepresentationsVariable(fieldConfig *plan.FieldConfigura
 	onTypeName := p.visitor.Config.Types.RenameTypeNameOnMatchStr(p.lastFieldEnclosingTypeName)
 
 	if len(p.representationsJson) == 0 {
-		p.representationsJson, _ = sjson.SetRawBytes(nil, "__typename", []byte("\""+onTypeName+"\""))
+		isInterface := false
+
+		switch p.visitor.Walker.EnclosingTypeDefinition.Kind {
+		case ast.NodeKindInterfaceTypeDefinition, ast.NodeKindInterfaceTypeExtension:
+			isInterface = true
+		}
+
+		if isInterface {
+			objectVariable := &resolve.ObjectVariable{
+				Path: []string{"__typename"},
+			}
+			renderer := resolve.NewJSONVariableRenderer()
+			objectVariable.Renderer = renderer
+			variable, exists := p.variables.AddVariable(objectVariable)
+			if !exists {
+				p.representationsJson, _ = sjson.SetRawBytes(p.representationsJson, "__typename", []byte(variable))
+			}
+		} else {
+			p.representationsJson, _ = sjson.SetRawBytes(nil, "__typename", []byte("\""+onTypeName+"\""))
+		}
 	}
 
 	for i := range fields {
@@ -576,22 +595,40 @@ func (p *Planner) fieldDefinition(fieldName, typeName string) *ast.FieldDefiniti
 	return &p.visitor.Definition.FieldDefinitions[definition]
 }
 
-func (p *Planner) addOneTypeInlineFragment() {
+func (p *Planner) addOnTypeInlineFragments() {
+	var renamedOnTypeNames [][]byte
+
+	switch p.visitor.Walker.EnclosingTypeDefinition.Kind {
+	case ast.NodeKindInterfaceTypeDefinition, ast.NodeKindInterfaceTypeExtension:
+		nodes := p.visitor.Definition.InterfaceTypeDefinitionImplementedByRootNodes(p.visitor.Walker.EnclosingTypeDefinition.Ref)
+		for _, node := range nodes {
+			typeNameBytes := []byte(node.NameString(p.visitor.Definition))
+			renamedOnTypeNames = append(renamedOnTypeNames, p.visitor.Config.Types.RenameTypeNameOnMatchBytes(typeNameBytes))
+		}
+	default:
+		renamedOnTypeNames = [][]byte{
+			p.visitor.Config.Types.RenameTypeNameOnMatchBytes([]byte(p.lastFieldEnclosingTypeName)),
+		}
+	}
+
+	// Share the selection set
 	selectionSet := p.upstreamOperation.AddSelectionSet()
-	onTypeName := p.visitor.Config.Types.RenameTypeNameOnMatchBytes([]byte(p.lastFieldEnclosingTypeName))
-	typeRef := p.upstreamOperation.AddNamedType(onTypeName)
-	inlineFragment := p.upstreamOperation.AddInlineFragment(ast.InlineFragment{
-		HasSelections: true,
-		SelectionSet:  selectionSet.Ref,
-		TypeCondition: ast.TypeCondition{
-			Type: typeRef,
-		},
-	})
-	p.upstreamOperation.AddSelection(p.nodes[len(p.nodes)-1].Ref, ast.Selection{
-		Kind: ast.SelectionKindInlineFragment,
-		Ref:  inlineFragment,
-	})
-	p.nodes = append(p.nodes, selectionSet)
+
+	for i, onTypeName := range renamedOnTypeNames {
+		typeRef := p.upstreamOperation.AddNamedType(onTypeName)
+		inlineFragment := p.upstreamOperation.AddInlineFragment(ast.InlineFragment{
+			HasSelections: true,
+			SelectionSet:  selectionSet.Ref,
+			TypeCondition: ast.TypeCondition{
+				Type: typeRef,
+			},
+		})
+		p.upstreamOperation.AddSelection(p.nodes[len(p.nodes)-1-i].Ref, ast.Selection{
+			Kind: ast.SelectionKindInlineFragment,
+			Ref:  inlineFragment,
+		})
+		p.nodes = append(p.nodes, selectionSet)
+	}
 }
 
 func (p *Planner) addEntitiesSelectionSet() {

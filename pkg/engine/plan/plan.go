@@ -94,7 +94,15 @@ type TypeConfiguration struct {
 
 type FieldConfigurations []FieldConfiguration
 
-func (f FieldConfigurations) ForTypeField(typeName, fieldName string) *FieldConfiguration {
+func (f FieldConfigurations) ForTypeField(enclosingDefinition ast.Node, definition *ast.Document, typeName, fieldName string) *FieldConfiguration {
+	switch enclosingDefinition.Kind {
+	case ast.NodeKindInterfaceTypeDefinition, ast.NodeKindInterfaceTypeExtension:
+		nodes := definition.InterfaceTypeDefinitionImplementedByRootNodes(enclosingDefinition.Ref)
+		if len(nodes) > 0 {
+			typeName = nodes[0].NameString(definition)
+		}
+	}
+
 	for i := range f {
 		if f[i].TypeName == typeName && f[i].FieldName == fieldName {
 			return &f[i]
@@ -109,9 +117,9 @@ type FieldConfiguration struct {
 	// DisableDefaultMapping - instructs planner whether to use path mapping coming from Path field
 	DisableDefaultMapping bool
 	// Path - represents a json path to lookup for a field value in response json
-	Path                 []string
-	Arguments            ArgumentsConfigurations
-	RequiresFields       []string
+	Path           []string
+	Arguments      ArgumentsConfigurations
+	RequiresFields []string
 	// UnescapeResponseJson set to true will allow fields (String,List,Object)
 	// to be resolved from an escaped JSON string
 	// e.g. {"response":"{\"foo\":\"bar\"}"} will be returned as {"foo":"bar"} when path is "response"
@@ -130,8 +138,10 @@ func (a ArgumentsConfigurations) ForName(argName string) *ArgumentConfiguration 
 	return nil
 }
 
-type SourceType string
-type ArgumentRenderConfig string
+type (
+	SourceType           string
+	ArgumentRenderConfig string
+)
 
 const (
 	ObjectFieldSource            SourceType           = "object_field"
@@ -208,7 +218,6 @@ type FieldMapping struct {
 // At the time when the resolver and all operations should be garbage collected, ensure to first cancel or timeout the ctx object
 // If you don't cancel the context.Context, the goroutines will run indefinitely and there's no reference left to stop them
 func NewPlanner(ctx context.Context, config Configuration) *Planner {
-
 	// required fields pre-processing
 
 	requiredFieldsWalker := astvisitor.NewWalker(48)
@@ -258,7 +267,6 @@ func (p *Planner) SetConfig(config Configuration) {
 }
 
 func (p *Planner) Plan(operation, definition *ast.Document, operationName string, report *operationreport.Report) (plan Plan) {
-
 	// make a copy of the config as the pre-processor modifies it
 
 	config := p.config
@@ -312,7 +320,6 @@ func (p *Planner) Plan(operation, definition *ast.Document, operationName string
 }
 
 func (p *Planner) selectOperation(operation *ast.Document, operationName string, report *operationreport.Report) {
-
 	numOfOperations := operation.NumOfOperationDefinitions()
 	operationName = strings.TrimSpace(operationName)
 	if len(operationName) == 0 && numOfOperations > 1 {
@@ -455,15 +462,12 @@ func (v *Visitor) EnterDirective(ref int) {
 }
 
 func (v *Visitor) LeaveSelectionSet(ref int) {
-
 }
 
 func (v *Visitor) EnterSelectionSet(ref int) {
-
 }
 
 func (v *Visitor) EnterField(ref int) {
-
 	if v.skipField(ref) {
 		return
 	}
@@ -518,7 +522,7 @@ func (v *Visitor) EnterField(ref int) {
 	bufferID, hasBuffer := v.fieldBuffers[ref]
 	v.currentField = &resolve.Field{
 		Name:       fieldAliasOrName,
-		Value:      v.resolveFieldValue(ref, fieldDefinitionType, true, path,false),
+		Value:      v.resolveFieldValue(ref, fieldDefinitionType, true, path, false),
 		HasBuffer:  hasBuffer,
 		BufferID:   bufferID,
 		OnTypeName: v.resolveOnTypeName(),
@@ -532,7 +536,7 @@ func (v *Visitor) EnterField(ref int) {
 
 	typeName := v.Walker.EnclosingTypeDefinition.NameString(v.Definition)
 	fieldNameStr := v.Operation.FieldNameString(ref)
-	fieldConfig := v.Config.Fields.ForTypeField(typeName, fieldNameStr)
+	fieldConfig := v.Config.Fields.ForTypeField(v.Walker.EnclosingTypeDefinition, v.Definition, typeName, fieldNameStr)
 	if fieldConfig == nil {
 		return
 	}
@@ -581,7 +585,7 @@ func (v *Visitor) resolveFieldValue(fieldRef, typeRef int, nullable bool, path [
 
 	fieldName := v.Operation.FieldNameString(fieldRef)
 	enclosingTypeName := v.Walker.EnclosingTypeDefinition.NameString(v.Definition)
-	fieldConfig := v.Config.Fields.ForTypeField(enclosingTypeName, fieldName)
+	fieldConfig := v.Config.Fields.ForTypeField(v.Walker.EnclosingTypeDefinition, v.Definition, enclosingTypeName, fieldName)
 	unescapeResponseJson := false
 	if !isList && fieldConfig != nil {
 		unescapeResponseJson = fieldConfig.UnescapeResponseJson
@@ -589,13 +593,13 @@ func (v *Visitor) resolveFieldValue(fieldRef, typeRef int, nullable bool, path [
 
 	switch v.Definition.Types[typeRef].TypeKind {
 	case ast.TypeKindNonNull:
-		return v.resolveFieldValue(fieldRef, ofType, false, path,false)
+		return v.resolveFieldValue(fieldRef, ofType, false, path, false)
 	case ast.TypeKindList:
-		listItem := v.resolveFieldValue(fieldRef, ofType, true, nil,true)
+		listItem := v.resolveFieldValue(fieldRef, ofType, true, nil, true)
 		return &resolve.Array{
-			Nullable: nullable,
-			Path:     path,
-			Item:     listItem,
+			Nullable:             nullable,
+			Path:                 path,
+			Item:                 listItem,
 			UnescapeResponseJson: unescapeResponseJson,
 		}
 	case ast.TypeKindNamed:
@@ -610,9 +614,9 @@ func (v *Visitor) resolveFieldValue(fieldRef, typeRef int, nullable bool, path [
 			switch typeName {
 			case "String":
 				return &resolve.String{
-					Path:     path,
-					Nullable: nullable,
-					Export:   fieldExport,
+					Path:                 path,
+					Nullable:             nullable,
+					Export:               fieldExport,
 					UnescapeResponseJson: unescapeResponseJson,
 				}
 			case "Boolean":
@@ -635,16 +639,16 @@ func (v *Visitor) resolveFieldValue(fieldRef, typeRef int, nullable bool, path [
 				}
 			default:
 				return &resolve.String{
-					Path:     path,
-					Nullable: nullable,
-					Export:   fieldExport,
+					Path:                 path,
+					Nullable:             nullable,
+					Export:               fieldExport,
 					UnescapeResponseJson: unescapeResponseJson,
 				}
 			}
 		case ast.NodeKindEnumTypeDefinition:
 			return &resolve.String{
-				Path:     path,
-				Nullable: nullable,
+				Path:                 path,
+				Nullable:             nullable,
 				UnescapeResponseJson: unescapeResponseJson,
 			}
 		case ast.NodeKindObjectTypeDefinition, ast.NodeKindInterfaceTypeDefinition, ast.NodeKindUnionTypeDefinition:
@@ -895,9 +899,7 @@ func (v *Visitor) resolveInputTemplates(config objectFetchConfiguration, input *
 			return s
 		}
 		path := parts[1:]
-		var (
-			variableName string
-		)
+		var variableName string
 		switch parts[0] {
 		case "object":
 			variable := &resolve.ObjectVariable{
@@ -1396,11 +1398,18 @@ func (c *configurationVisitor) EnterField(ref int) {
 			return
 		}
 	}
+
+	switch c.walker.EnclosingTypeDefinition.Kind {
+	case ast.NodeKindInterfaceTypeDefinition, ast.NodeKindInterfaceTypeExtension:
+		nodes := c.definition.InterfaceTypeDefinitionImplementedByRootNodes(c.walker.EnclosingTypeDefinition.Ref)
+		if len(nodes) > 0 {
+			typeName = nodes[0].NameString(c.definition)
+		}
+	}
+
 	for i, config := range c.config.DataSources {
 		if config.HasRootNode(typeName, fieldName) {
-			var (
-				bufferID int
-			)
+			var bufferID int
 			if !isSubscription {
 				bufferID = c.nextBufferID()
 				c.fieldBuffers[ref] = bufferID
@@ -1490,7 +1499,7 @@ func (r *requiredFieldsVisitor) EnterDocument(operation, definition *ast.Documen
 func (r *requiredFieldsVisitor) EnterField(ref int) {
 	typeName := r.walker.EnclosingTypeDefinition.NameString(r.definition)
 	fieldName := r.operation.FieldNameUnsafeString(ref)
-	fieldConfig := r.config.Fields.ForTypeField(typeName, fieldName)
+	fieldConfig := r.config.Fields.ForTypeField(r.walker.EnclosingTypeDefinition, r.definition, typeName, fieldName)
 	if fieldConfig == nil {
 		return
 	}
