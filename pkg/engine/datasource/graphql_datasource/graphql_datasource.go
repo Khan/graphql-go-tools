@@ -283,7 +283,7 @@ func (p *Planner) ConfigureFetch() plan.FetchConfiguration {
 			ExtractGraphqlResponse:    true,
 			ExtractFederationEntities: p.extractEntities,
 		},
-		BatchConfig:      batchConfig,
+		BatchConfig: batchConfig,
 	}
 }
 
@@ -611,7 +611,13 @@ func (p *Planner) addOnTypeInlineFragments() {
 		}
 	}
 
-	// Share the selection set
+	// Share the selection set between the inline fragments; this only
+	// works if all the inline fragments have exactly the same selections.
+	// Fragments won't have the same selection if the non-upstream operation
+	// itself contains inline fragments. The federation code doesn't (yet)
+	// support inline fragments at the top-level of an upstream operation, but
+	// it'll need to to generally support federation of interface and union
+	// types.
 	selectionSet := p.upstreamOperation.AddSelectionSet()
 
 	for i, onTypeName := range renamedOnTypeNames {
