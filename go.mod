@@ -31,6 +31,7 @@ require (
 	github.com/nats-io/nats.go v1.11.1-0.20210623165838-4b75fc59ae30
 	github.com/qri-io/jsonschema v0.2.1
 	github.com/sebdah/goldie v0.0.0-20180424091453-8784dd1ab561
+	github.com/sirupsen/logrus v1.4.2 // indirect
 	github.com/spf13/afero v1.6.0 // indirect
 	github.com/spf13/cobra v0.0.5
 	github.com/spf13/viper v1.3.2

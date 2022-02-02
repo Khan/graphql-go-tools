@@ -6,14 +6,18 @@ import (
 	"compress/gzip"
 	"context"
 	"errors"
+	"fmt"
 	"io/ioutil"
 	"net/http"
+	"reflect"
 	"strconv"
 	"sync"
+	"unsafe"
 
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/jensneuse/abstractlogger"
 	"github.com/jensneuse/graphql-go-tools/pkg/engine/datasource/introspection_datasource"
+	"github.com/sirupsen/logrus"
 
 	"github.com/jensneuse/graphql-go-tools/pkg/ast"
 	"github.com/jensneuse/graphql-go-tools/pkg/astprinter"
@@ -224,8 +228,34 @@ func NewExecutionEngineV2(ctx context.Context, logger abstractlogger.Logger, eng
 	}, nil
 }
 
+// NOTE: this only works for our setup, do not merge upstream!
+func (e *ExecutionEngineV2) _debug(ctx context.Context, msg string) {
+	if ctx == nil {
+		return
+	}
+	ll, ok := e.logger.(*abstractlogger.LogrusLogger)
+	if !ok {
+		return // must be a test file
+	}
+	// This accesses the private field `ll.l`.  See
+	// https://stackoverflow.com/questions/42664837/how-to-access-unexported-struct-fields
+	logrusField := reflect.ValueOf(ll).Elem().FieldByName("l")
+	logrusInterface := reflect.NewAt(
+		logrusField.Type(),
+		unsafe.Pointer(logrusField.UnsafeAddr()),
+	).Elem().Interface()
+
+	logrusInstance, ok := logrusInterface.(*logrus.Logger)
+	if !ok {
+		panic("Not a logrus logger?!")
+	}
+	logrusInstance.WithContext(ctx).Debug(msg)
+}
+
 func (e *ExecutionEngineV2) prepareExecutionContext(ctx context.Context, operation *Request, options ...ExecutionOptionsV2) (*internalExecutionContext, plan.Plan, error) {
+	e._debug(ctx, "graphql.ExecutionEngineV2.prepareExecutionContext begin")
 	if !operation.IsNormalized() {
+		e._debug(ctx, "graphql.ExecutionEngineV2.prepareExecutionContext normalize")
 		result, err := operation.Normalize(e.config.schema)
 		if err != nil {
 			return nil, nil, err
@@ -236,6 +266,7 @@ func (e *ExecutionEngineV2) prepareExecutionContext(ctx context.Context, operati
 		}
 	}
 
+	e._debug(ctx, "graphql.ExecutionEngineV2.prepareExecutionContext validate")
 	result, err := operation.ValidateForSchema(e.config.schema)
 	if err != nil {
 		return nil, nil, err
@@ -244,15 +275,17 @@ func (e *ExecutionEngineV2) prepareExecutionContext(ctx context.Context, operati
 		return nil, nil, result.Errors
 	}
 
+	e._debug(ctx, "graphql.ExecutionEngineV2.prepareExecutionContext prepare")
 	execContext := e.getExecutionCtx()
 	execContext.prepare(ctx, operation.Variables, operation.request)
 
 	for i := range options {
+		e._debug(ctx, "graphql.ExecutionEngineV2.prepareExecutionContext apply option")
 		options[i](execContext)
 	}
 
 	var report operationreport.Report
-	cachedPlan := e.getCachedPlan(execContext, &operation.document, &e.config.schema.document, operation.OperationName, &report)
+	cachedPlan := e.getCachedPlan(execContext, ctx, &operation.document, &e.config.schema.document, operation.OperationName, &report)
 	if report.HasErrors() {
 		return execContext, cachedPlan, report
 	}
@@ -269,6 +302,7 @@ func (e *ExecutionEngineV2) ExecuteAndReturnPlan(ctx context.Context, operation 
 		return nil, err
 	}
 
+	e._debug(ctx, "graphql.ExecutionEngineV2.ExecuteAndReturnPlan executing plan")
 	switch p := cachedPlan.(type) {
 	case *plan.SynchronousResponsePlan:
 		err = e.resolver.ResolveGraphQLResponse(execContext.resolveContext, p.Response, nil, writer)
@@ -278,6 +312,7 @@ func (e *ExecutionEngineV2) ExecuteAndReturnPlan(ctx context.Context, operation 
 		return nil, errors.New("execution of operation is not possible")
 	}
 
+	e._debug(ctx, "graphql.ExecutionEngineV2.ExecuteAndReturnPlan done")
 	return cachedPlan, err
 }
 
@@ -298,7 +333,8 @@ func (e *ExecutionEngineV2) GetPlan(ctx context.Context, operation *Request, opt
 	return cachedPlan, nil
 }
 
-func (e *ExecutionEngineV2) getCachedPlan(ctx *internalExecutionContext, operation, definition *ast.Document, operationName string, report *operationreport.Report) plan.Plan {
+func (e *ExecutionEngineV2) getCachedPlan(ctx *internalExecutionContext, logCtx context.Context, operation, definition *ast.Document, operationName string, report *operationreport.Report) plan.Plan {
+	e._debug(logCtx, "graphql.ExecutionEngineV2.getCachedPlan begin")
 	hash := pool.Hash64.Get()
 	hash.Reset()
 	defer pool.Hash64.Put(hash)
@@ -312,19 +348,24 @@ func (e *ExecutionEngineV2) getCachedPlan(ctx *internalExecutionContext, operati
 
 	if cached, ok := e.executionPlanCache.Get(cacheKey); ok {
 		if p, ok := cached.(plan.Plan); ok {
+			e._debug(logCtx, fmt.Sprintf("graphql.ExecutionEngineV2.getCachedPlan cache-hit (opname %v, engine %p, key %v)", operationName, e, cacheKey))
 			return p
 		}
 	}
+	e._debug(logCtx, fmt.Sprintf("graphql.ExecutionEngineV2.getCachedPlan cache-miss (opname %v, engine %p, key %v)", operationName, e, cacheKey))
 
 	e.plannerMu.Lock()
 	defer e.plannerMu.Unlock()
+	e._debug(logCtx, "graphql.ExecutionEngineV2.getCachedPlan planning")
 	planResult := e.planner.Plan(operation, definition, operationName, report)
 	if report.HasErrors() {
 		return nil
 	}
 
+	e._debug(logCtx, "graphql.ExecutionEngineV2.getCachedPlan processing")
 	p := ctx.postProcessor.Process(planResult)
 	e.executionPlanCache.Add(cacheKey, p)
+	e._debug(logCtx, "graphql.ExecutionEngineV2.getCachedPlan done")
 	return p
 }
 
