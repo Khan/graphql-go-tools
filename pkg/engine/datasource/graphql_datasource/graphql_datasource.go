@@ -7,8 +7,10 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 
 	"github.com/jensneuse/graphql-go-tools/pkg/asttransform"
+	"github.com/jensneuse/graphql-go-tools/pkg/astvisitor"
 	"github.com/tidwall/sjson"
 
 	"github.com/jensneuse/graphql-go-tools/pkg/ast"
@@ -237,6 +239,7 @@ func (p *Planner) Register(visitor *plan.Visitor, configuration plan.DataSourceC
 	p.visitor.Walker.RegisterInlineFragmentVisitor(p)
 	p.visitor.Walker.RegisterEnterDirectiveVisitor(p)
 	p.visitor.Walker.RegisterVariableDefinitionVisitor(p)
+	p.visitor.Walker.AddListener(p)
 
 	p.dataSourceConfig = configuration
 	err := json.Unmarshal(configuration.Custom, &p.config)
@@ -248,6 +251,17 @@ func (p *Planner) Register(visitor *plan.Visitor, configuration plan.DataSourceC
 	p.isNested = isNested
 
 	return nil
+}
+
+func (p *Planner) DidVisit(kind astvisitor.VisitorKind, ref int, visitor interface{}) {
+	if p != visitor {
+		return
+	}
+	fmt.Println(">>>", kind, ref, p.config.Fetch.URL, fmt.Sprintf("%p", p))
+	fmt.Println("====")
+	astprinter.Print(p.upstreamOperation, nil, os.Stdout)
+	fmt.Println()
+	fmt.Println("====")
 }
 
 func (p *Planner) ConfigureFetch() plan.FetchConfiguration {
@@ -283,7 +297,7 @@ func (p *Planner) ConfigureFetch() plan.FetchConfiguration {
 			ExtractGraphqlResponse:    true,
 			ExtractFederationEntities: p.extractEntities,
 		},
-		BatchConfig:      batchConfig,
+		BatchConfig: batchConfig,
 	}
 }
 
