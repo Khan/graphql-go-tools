@@ -32,7 +32,6 @@ type Planner struct {
 	representationsJson                []byte
 	nodes                              []ast.Node
 	variables                          resolve.Variables
-	lastFieldEnclosingTypeName         string
 	disallowSingleFlight               bool
 	hasFederationRoot                  bool
 	extractEntities                    bool
@@ -355,6 +354,10 @@ func (p *Planner) LeaveSelectionSet(ref int) {
 }
 
 func (p *Planner) EnterInlineFragment(ref int) {
+	// If this is the first node below the parent path being visited by this
+	// planner, set up federation if needed.
+	p.handleFederation()
+
 	typeCondition := p.visitor.Operation.InlineFragmentTypeConditionName(ref)
 	if typeCondition == nil && !p.visitor.Operation.InlineFragments[ref].HasDirectives {
 		return
@@ -412,21 +415,24 @@ func (p *Planner) EnterField(ref int) {
 		p.rootTypeName = p.visitor.Walker.EnclosingTypeDefinition.NameString(p.visitor.Definition)
 	}
 
-	p.lastFieldEnclosingTypeName = p.visitor.Walker.EnclosingTypeDefinition.NameString(p.visitor.Definition)
+	// If this is the first node below the parent path being visited by this
+	// planner, set up federation if needed.
+	p.handleFederation()
 
-	typeName := p.lastFieldEnclosingTypeName
+	// Then add the field.
+	p.addField(ref)
+
+	typeName := p.visitor.Walker.EnclosingTypeDefinition.NameString(p.visitor.Definition)
 
 	fieldConfiguration := p.visitor.Config.Fields.ForTypeField(typeName, fieldName)
 	if fieldConfiguration == nil {
-		p.addField(ref)
 		return
 	}
 
 	// Note: federated fields always have a field configuration because at
 	// least the federation key for the type the field lives on is required
 	// (and required fields are specified in the configuration).
-	p.handleFederation(fieldConfiguration)
-	p.addField(ref)
+	p.updateRepresentationsVariable(fieldConfiguration)
 
 	upstreamFieldRef := p.nodes[len(p.nodes)-1].Ref
 
@@ -490,38 +496,54 @@ func (p *Planner) EnterDocument(operation, definition *ast.Document) {
 func (p *Planner) LeaveDocument(operation, definition *ast.Document) {
 }
 
-func (p *Planner) handleFederation(fieldConfig *plan.FieldConfiguration) {
+func (p *Planner) handleFederation() {
 	if !p.config.Federation.Enabled { // federation must be enabled
 		return
 	}
-	// If there's no federation root and this isn't a nested request, this
-	// isn't a federated field and there's nothing to do.
-	if !p.hasFederationRoot && !p.isNestedRequest() {
-		return
-	}
-	// If a federated root is already present, the representations variable has
-	// already been added. Update it to include information for the additional
-	// field. NOTE: only the first federated field has isNestedRequest set to
-	// true. Subsequent fields use hasFederationRoot to determine federation
-	// status.
-	if p.hasFederationRoot {
-		// Ideally the "representations" variable could be set once in
-		// LeaveDocument, but ConfigureFetch is called before this visitor's
-		// LeaveDocument is called. (Updating the visitor logic to call
-		// LeaveDocument in reverse registration order would fix this issue.)
-		p.updateRepresentationsVariable(fieldConfig)
+	// If there is already a federation root or this request isn't nested,
+	// there's nothing more to do. NOTE: only the first federated field has
+	// isNestedRequest set to true. Subsequent fields use hasFederationRoot to
+	// determine federation status.
+	if p.hasFederationRoot || !p.isNestedRequest() {
 		return
 	}
 	p.hasFederationRoot = true
 	// query($representations: [_Any!]!){_entities(representations: $representations){... on Product
-	p.addRepresentationsVariableDefinition()     // $representations: [_Any!]!
-	p.addEntitiesSelectionSet()                  // {_entities(representations: $representations)
-	p.addOneTypeInlineFragment()                 // ... on Product
-	p.updateRepresentationsVariable(fieldConfig) // "variables\":{\"representations\":[{\"upc\":\"$$0$$\",\"__typename\":\"Product\"}]}}
+	p.addRepresentationsVariableDefinition() // $representations: [_Any!]!
+	p.addEntitiesSelectionSet()              // {_entities(representations: $representations)
+	p.addOnTypeInlineFragment()              // ... on Product
+	p.addRepresentationsTypename()           // "variables\":{\"representations\":[{\"upc\":\"$$0$$\",\"__typename\":\"Product\"}]}}
+	p.extractEntities = true
+}
+
+func (p *Planner) addRepresentationsTypename() {
+	if p.visitor.Walker.LastFieldTypeDefinition.Kind == ast.NodeKindObjectTypeDefinition {
+		lastFieldTypeName := p.visitor.Walker.LastFieldTypeDefinition.NameString(p.visitor.Definition)
+		onTypeName := p.visitor.Config.Types.RenameTypeNameOnMatchStr(lastFieldTypeName)
+		p.representationsJson, _ = sjson.SetRawBytes(nil, "__typename", []byte("\""+onTypeName+"\""))
+	} else {
+		// The field is an abstract type, i.e. an interface or union. In this
+		// case the representation typename needs to come from a parent fetch
+		// response.
+		objectVariable := &resolve.ObjectVariable{
+			Path: []string{"__typename"},
+		}
+		renderer := resolve.NewJSONVariableRenderer()
+		objectVariable.Renderer = renderer
+		variable, exists := p.variables.AddVariable(objectVariable)
+		if !exists {
+			p.representationsJson, _ = sjson.SetRawBytes(p.representationsJson, "__typename", []byte(variable))
+		}
+	}
+	p.updateRepresentationsUpstreamVariable()
 }
 
 func (p *Planner) updateRepresentationsVariable(fieldConfig *plan.FieldConfiguration) {
 	// "variables\":{\"representations\":[{\"upc\":\$$0$$\,\"__typename\":\"Product\"}]}}
+	if !p.hasFederationRoot {
+		return
+	}
+
 	parser := astparser.NewParser()
 	doc := ast.NewDocument()
 	doc.Input.ResetInputString(p.config.Federation.ServiceSDL)
@@ -539,17 +561,11 @@ func (p *Planner) updateRepresentationsVariable(fieldConfig *plan.FieldConfigura
 		return
 	}
 
-	onTypeName := p.visitor.Config.Types.RenameTypeNameOnMatchStr(p.lastFieldEnclosingTypeName)
-
-	if len(p.representationsJson) == 0 {
-		p.representationsJson, _ = sjson.SetRawBytes(nil, "__typename", []byte("\""+onTypeName+"\""))
-	}
-
 	for i := range fields {
 		objectVariable := &resolve.ObjectVariable{
 			Path: []string{fields[i]},
 		}
-		fieldDef := p.fieldDefinition(fields[i], p.lastFieldEnclosingTypeName)
+		fieldDef := p.fieldDefinition(fields[i], p.visitor.Walker.EnclosingTypeDefinition.NameString(p.visitor.Definition))
 		if fieldDef == nil {
 			continue
 		}
@@ -564,9 +580,13 @@ func (p *Planner) updateRepresentationsVariable(fieldConfig *plan.FieldConfigura
 		}
 		p.representationsJson, _ = sjson.SetRawBytes(p.representationsJson, fields[i], []byte(variable))
 	}
+
+	p.updateRepresentationsUpstreamVariable()
+}
+
+func (p *Planner) updateRepresentationsUpstreamVariable() {
 	representationsJson := append([]byte("["), append(p.representationsJson, []byte("]")...)...)
 	p.upstreamVariables, _ = sjson.SetRawBytes(p.upstreamVariables, "representations", representationsJson)
-	p.extractEntities = true
 }
 
 func (p *Planner) fieldDefinition(fieldName, typeName string) *ast.FieldDefinition {
@@ -581,9 +601,19 @@ func (p *Planner) fieldDefinition(fieldName, typeName string) *ast.FieldDefiniti
 	return &p.visitor.Definition.FieldDefinitions[definition]
 }
 
-func (p *Planner) addOneTypeInlineFragment() {
+func (p *Planner) addOnTypeInlineFragment() {
+	// The addition of an inline fragment is only needed for concrete types;
+	// operation normalization adds inline fragments for interface types (and
+	// union types are already required to have fragment selections), and those
+	// are used as-is.
+	if p.visitor.Walker.LastFieldTypeDefinition.Kind != ast.NodeKindObjectTypeDefinition {
+		return
+	}
+
+	lastFieldTypeName := p.visitor.Walker.LastFieldTypeDefinition.NameBytes(p.visitor.Definition)
+
 	selectionSet := p.upstreamOperation.AddSelectionSet()
-	onTypeName := p.visitor.Config.Types.RenameTypeNameOnMatchBytes([]byte(p.lastFieldEnclosingTypeName))
+	onTypeName := p.visitor.Config.Types.RenameTypeNameOnMatchBytes(lastFieldTypeName)
 	typeRef := p.upstreamOperation.AddNamedType(onTypeName)
 	inlineFragment := p.upstreamOperation.AddInlineFragment(ast.InlineFragment{
 		HasSelections: true,
