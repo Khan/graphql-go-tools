@@ -39,7 +39,12 @@ func TestRequest_Normalize(t *testing.T) {
 
 		normalizedOperation := `query Fragments($droidID: ID!){
     hero {
-        name
+        ... on Human {
+            name
+        }
+        ... on Droid {
+            name
+        }
     }
     droid(id: $droidID){
         name

@@ -272,7 +272,6 @@ func (e *ExecutionEngineV2) Execute(ctx context.Context, operation *Request, wri
 }
 
 func (e *ExecutionEngineV2) getCachedPlan(ctx *internalExecutionContext, operation, definition *ast.Document, operationName string, report *operationreport.Report) plan.Plan {
-
 	hash := pool.Hash64.Get()
 	hash.Reset()
 	defer pool.Hash64.Put(hash)

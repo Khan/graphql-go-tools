@@ -69,3 +69,31 @@ func (d *Document) AddInlineFragment(fragment InlineFragment) int {
 	d.InlineFragments = append(d.InlineFragments, fragment)
 	return len(d.InlineFragments) - 1
 }
+
+func (d *Document) ExpandInterfaceInlineFragment(inlineFragment int, parentSelectionSet int, concreteTypeNames []string) {
+	replacementSelectionSet := d.AddSelectionSet().Ref
+
+	for _, typeName := range concreteTypeNames {
+		namedType := d.AddNamedType([]byte(typeName))
+		newInlineFragment := d.CopyInlineFragment(inlineFragment)
+
+		d.InlineFragments[newInlineFragment].TypeCondition = TypeCondition{
+			Type: namedType,
+		}
+
+		d.AddSelection(replacementSelectionSet, Selection{
+			Kind: SelectionKindInlineFragment,
+			Ref:  newInlineFragment,
+		})
+	}
+
+	index, _ := d.SelectionIndex(SelectionKindInlineFragment, inlineFragment, parentSelectionSet)
+
+	d.ReplaceSelectionOnSelectionSet(parentSelectionSet, index, replacementSelectionSet)
+}
+
+func (d *Document) PromoteUnionInlineFragments(inlineFragment int, parentSelectionSet int) {
+	index, _ := d.SelectionIndex(SelectionKindInlineFragment, inlineFragment, parentSelectionSet)
+
+	d.ReplaceSelectionOnSelectionSet(parentSelectionSet, index, d.InlineFragments[inlineFragment].SelectionSet)
+}

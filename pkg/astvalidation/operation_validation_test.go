@@ -2625,7 +2625,7 @@ func TestExecutionValidation(t *testing.T) {
 											meowVolume
 										}
 									}`,
-							Fragments(), Invalid)
+							Fragments(), Invalid, withDisableNormalization())
 					})
 					t.Run("138 variant", func(t *testing.T) {
 						run(`
@@ -2744,7 +2744,7 @@ func TestExecutionValidation(t *testing.T) {
 									fragment sentientFragment on Sentient {
 										name
 									}`,
-							Fragments(), Invalid)
+							Fragments(), Invalid, withDisableNormalization())
 					})
 				})
 			})

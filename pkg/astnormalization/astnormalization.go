@@ -162,6 +162,17 @@ func (o *OperationNormalizer) setupOperationWalkers() {
 	fragmentSpreadInline(&fragmentInline)
 	directiveIncludeSkip(&fragmentInline)
 
+	// Must run after fragment inlining and before fragment merging.
+	//
+	// TODO: also consider merging compatible sibling abstract fragments.
+	abstractExpansion := astvisitor.NewWalker(48)
+	expandAbstractInlineFragments(&abstractExpansion)
+	expandInterfaceSelectionSets(&abstractExpansion)
+
+	// Must run after fragment expansion.
+	invalidFragmentElimination := astvisitor.NewWalker(48)
+	deleteInvalidInlineFragments(&invalidFragmentElimination)
+
 	extractVariablesWalker := astvisitor.NewWalker(48)
 	if o.options.extractVariables {
 		o.variablesExtraction = extractVariables(&extractVariablesWalker)
@@ -180,7 +191,7 @@ func (o *OperationNormalizer) setupOperationWalkers() {
 	if o.options.removeUnusedVariables {
 		deleteUnusedVariables(&other)
 	}
-	o.operationWalkers = append(o.operationWalkers, &fragmentInline, &extractVariablesWalker, &other)
+	o.operationWalkers = append(o.operationWalkers, &fragmentInline, &abstractExpansion, &invalidFragmentElimination, &extractVariablesWalker, &other)
 }
 
 func (o *OperationNormalizer) prepareDefinition(definition *ast.Document, report *operationreport.Report) {

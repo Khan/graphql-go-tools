@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/jensneuse/graphql-go-tools/internal/pkg/unsafebytes"
+	"github.com/jensneuse/graphql-go-tools/pkg/lexer/literal"
 	"github.com/jensneuse/graphql-go-tools/pkg/lexer/position"
 )
 
@@ -104,6 +105,15 @@ func (d *Document) SelectionsAfter(selectionKind SelectionKind, selectionRef int
 	return false
 }
 
+func (d *Document) SelectionIndex(selectionKind SelectionKind, selectionRef int, selectionSet int) (int, bool) {
+	for i, selection := range d.SelectionSets[selectionSet].SelectionRefs {
+		if d.Selections[selection].Kind == selectionKind && d.Selections[selection].Ref == selectionRef {
+			return i, true
+		}
+	}
+	return 0, false
+}
+
 func (d *Document) SelectionsAfterField(field int, selectionSet Node) bool {
 	return d.SelectionsAfter(SelectionKindField, field, selectionSet)
 }
@@ -178,4 +188,49 @@ func (d *Document) SelectionSetHasFieldSelectionWithNameOrAliasBytes(set int, na
 
 func (d *Document) SelectionSetHasFieldSelectionWithNameOrAliasString(set int, nameOrAlias string) bool {
 	return d.SelectionSetHasFieldSelectionWithNameOrAliasBytes(set, unsafebytes.StringToBytes(nameOrAlias))
+}
+
+func (d *Document) ExpandInterfaceSelectionSet(set int, concreteTypeNames []string) {
+	selectionSetToAdd := d.AddSelectionSet().Ref
+	inlineFragmentSelectionSet := d.AddSelectionSet().Ref
+
+	for i := len(d.SelectionSets[set].SelectionRefs) - 1; i >= 0; i -= 1 {
+		selection := d.SelectionSets[set].SelectionRefs[i]
+		if d.Selections[selection].Kind != SelectionKindField {
+			continue
+		}
+		if bytes.Equal(d.FieldNameBytes(d.Selections[selection].Ref), literal.TYPENAME) {
+			continue
+		}
+		d.RemoveFromSelectionSet(set, i)
+		d.SelectionSets[inlineFragmentSelectionSet].SelectionRefs = append(d.SelectionSets[inlineFragmentSelectionSet].SelectionRefs, selection)
+	}
+
+	// These are no field selections outside of fragments to expand!
+	if len(d.SelectionSets[inlineFragmentSelectionSet].SelectionRefs) == 0 {
+		return
+	}
+
+	// Reverse the refs, because they were added in reverse order.
+	refs := d.SelectionSets[inlineFragmentSelectionSet].SelectionRefs
+	for i := 0; i < len(refs)/2; i += 1 {
+		refs[i], refs[len(refs)-1] = refs[len(refs)-1], refs[i]
+	}
+
+	for _, typeName := range concreteTypeNames {
+		namedType := d.AddNamedType([]byte(typeName))
+		newInlineFragment := d.AddInlineFragment(InlineFragment{
+			TypeCondition: TypeCondition{
+				Type: namedType,
+			},
+			HasSelections: true,
+			SelectionSet:  d.CopySelectionSet(inlineFragmentSelectionSet),
+		})
+		d.AddSelection(selectionSetToAdd, Selection{
+			Kind: SelectionKindInlineFragment,
+			Ref:  newInlineFragment,
+		})
+	}
+
+	d.AppendSelectionSet(set, selectionSetToAdd)
 }

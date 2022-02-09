@@ -3,6 +3,7 @@ package graphql
 import (
 	"fmt"
 
+	"github.com/jensneuse/graphql-go-tools/pkg/ast"
 	"github.com/jensneuse/graphql-go-tools/pkg/operationreport"
 )
 
@@ -52,11 +53,40 @@ func (d DefaultFieldsValidator) ValidateByFieldList(request *Request, schema *Sc
 	requestedTypes := make(RequestTypes)
 	NewExtractor().ExtractFieldsFromRequest(request, schema, &report, requestedTypes)
 
-	if restrictionList.Kind == BlockList {
-		return d.checkForBlockedFields(restrictionList, requestedTypes, report)
+	// Expand interface types into the concrete types that implement the
+	// interface. This effectively makes validation on an interface type a
+	// shorthand for validation on the implementing concrete types.
+	expandedRestrictionList := FieldRestrictionList{
+		Kind:  restrictionList.Kind,
+		Types: make([]Type, 0, len(restrictionList.Types)),
 	}
 
-	return d.checkForAllowedFields(restrictionList, requestedTypes, report)
+	for _, t := range restrictionList.Types {
+		node, ok := schema.document.Index.FirstNonExtensionNodeByNameBytes([]byte(t.Name))
+		// Fields will never have a type that isn't in the schema, so removing
+		// unknown types from the restriction list is a no-op.
+		if !ok {
+			continue
+		}
+		// Only interface types need to be expanded. Unions require explicit
+		// fragments for selections.
+		if node.Kind != ast.NodeKindInterfaceTypeDefinition {
+			expandedRestrictionList.Types = append(expandedRestrictionList.Types, t)
+			continue
+		}
+		for _, typeName := range schema.document.ConcreteInterfaceImplementationTypeNames(node.Ref) {
+			expandedRestrictionList.Types = append(expandedRestrictionList.Types, Type{
+				Name:   typeName,
+				Fields: t.Fields,
+			})
+		}
+	}
+
+	if expandedRestrictionList.Kind == BlockList {
+		return d.checkForBlockedFields(expandedRestrictionList, requestedTypes, report)
+	}
+
+	return d.checkForAllowedFields(expandedRestrictionList, requestedTypes, report)
 }
 
 func (d DefaultFieldsValidator) checkForBlockedFields(restrictionList FieldRestrictionList, requestTypes RequestTypes, report operationreport.Report) (RequestFieldsValidationResult, error) {

@@ -325,7 +325,7 @@ func TestExecutionEngineV2_Execute(t *testing.T) {
 							expectedHost:     "example.com",
 							expectedPath:     "/",
 							expectedBody:     "",
-							sendResponseBody: `{"hero": {"name": "Luke Skywalker"}}`,
+							sendResponseBody: `{"hero": {"__typename": "Human", "name": "Luke Skywalker"}}`,
 							sendStatusCode:   200,
 						}),
 					},
@@ -362,7 +362,7 @@ func TestExecutionEngineV2_Execute(t *testing.T) {
 							expectedHost:     "example.com",
 							expectedPath:     "/foo",
 							expectedBody:     "",
-							sendResponseBody: `{"hero": {"name": "Luke Skywalker"}}`,
+							sendResponseBody: `{"hero": {"__typename": "Human", "name": "Luke Skywalker"}}`,
 							sendStatusCode:   200,
 						}),
 					},
@@ -396,7 +396,7 @@ func TestExecutionEngineV2_Execute(t *testing.T) {
 							expectedHost:     "example.com",
 							expectedPath:     "/foo",
 							expectedBody:     "",
-							sendResponseBody: `{"hero": {"name": "Luke Skywalker"}}`,
+							sendResponseBody: `{"hero": {"__typename": "Human", "name": "Luke Skywalker"}}`,
 							sendStatusCode:   200,
 						}),
 					},
@@ -432,7 +432,7 @@ func TestExecutionEngineV2_Execute(t *testing.T) {
 							expectedHost:     "example.com",
 							expectedPath:     "/",
 							expectedBody:     "",
-							sendResponseBody: `{"data":{"hero":{"name":"Luke Skywalker"}}}`,
+							sendResponseBody: `{"data":{"hero":{"__typename": "Human", "name":"Luke Skywalker"}}}`,
 							sendStatusCode:   200,
 						}),
 					},
@@ -467,7 +467,7 @@ func TestExecutionEngineV2_Execute(t *testing.T) {
 							expectedHost:     "example.com",
 							expectedPath:     "/",
 							expectedBody:     "",
-							sendResponseBody: `{"data":{"hero":{"name":"Luke Skywalker"}}}`,
+							sendResponseBody: `{"data":{"hero":{"__typename": "Human", "name":"Luke Skywalker"}}}`,
 							sendStatusCode:   200,
 						}),
 					},
@@ -498,7 +498,7 @@ func TestExecutionEngineV2_Execute(t *testing.T) {
 							expectedHost:     "example.com",
 							expectedPath:     "/",
 							expectedBody:     "",
-							sendResponseBody: `{"data":{"droid":{"name":"R2D2"}}}`,
+							sendResponseBody: `{"data":{"droid":{"__typename": "Droid", "name":"R2D2"}}}`,
 							sendStatusCode:   200,
 						}),
 					},
@@ -932,7 +932,6 @@ func TestExecutionEngineV2_Execute(t *testing.T) {
 				expectedResponse: `{"data":{"heroDefault":"R2D2","heroDefaultRequired":"R2D2"}}`,
 			},
 		))
-
 	})
 
 	t.Run("execute query with data source on field with interface return type", runWithoutError(
@@ -955,7 +954,7 @@ func TestExecutionEngineV2_Execute(t *testing.T) {
 						HTTPClient: testNetHttpClient(t, roundTripperTestCase{
 							expectedHost:     "example.com",
 							expectedPath:     "/",
-							expectedBody:     `{"query":"{codeType {code __typename ... on Country {name}}}"}`,
+							expectedBody:     `{"query":"{codeType {__typename ... on Country {name} ... on Continent {code} ... on Country {code}}}"}`,
 							sendResponseBody: `{"data":{"codeType":{"__typename":"Country","code":"de","name":"Germany"}}}`,
 							sendStatusCode:   200,
 						}),
@@ -969,7 +968,7 @@ func TestExecutionEngineV2_Execute(t *testing.T) {
 				},
 			},
 			fields:           []plan.FieldConfiguration{},
-			expectedResponse: `{"data":{"codeType":{"code":"de","name":"Germany"}}}`,
+			expectedResponse: `{"data":{"codeType":{"name":"Germany","code":"de"}}}`,
 		},
 	))
 
@@ -1144,7 +1143,6 @@ func TestExecutionEngineV2_Execute(t *testing.T) {
 }
 
 func TestExecutionEngineV2_FederationAndSubscription_IntegrationTest(t *testing.T) {
-
 	runIntegration := func(t *testing.T, enableDataLoader bool, secondRun bool) {
 		t.Helper()
 		ctx, cancelFn := context.WithCancel(context.Background())
@@ -1281,7 +1279,6 @@ subscription UpdatedPrice {
 			}
 		})
 		*/
-
 	}
 
 	t.Run("federation", func(t *testing.T) {
@@ -1325,7 +1322,6 @@ func (a *afterFetchHook) OnError(ctx resolve.HookContext, output []byte, singleF
 }
 
 func TestExecutionWithOptions(t *testing.T) {
-
 	closer := make(chan struct{})
 	defer close(closer)
 
@@ -1336,6 +1332,10 @@ func TestExecutionWithOptions(t *testing.T) {
 			{
 				RootNodes: []plan.TypeField{
 					{TypeName: "Query", FieldNames: []string{"hero"}},
+				},
+				ChildNodes: []plan.TypeField{
+					{TypeName: "Human", FieldNames: []string{"name"}},
+					{TypeName: "Droid", FieldNames: []string{"name"}},
 				},
 				Factory: &graphql_datasource.Factory{
 					HTTPClient: testNetHttpClient(t, roundTripperTestCase{
@@ -1375,7 +1375,7 @@ func TestExecutionWithOptions(t *testing.T) {
 	resultWriter := NewEngineResultWriter()
 	err = engine.Execute(context.Background(), &operation, &resultWriter, WithBeforeFetchHook(before), WithAfterFetchHook(after))
 
-	assert.Equal(t, `{"method":"GET","url":"https://example.com/","body":{"query":"{hero}"}}`, before.input)
+	assert.Equal(t, `{"method":"GET","url":"https://example.com/","body":{"query":"{hero {__typename ... on Human {name} ... on Droid {name}}}"}}`, before.input)
 	assert.Equal(t, `{"hero":{"name":"Luke Skywalker"}}`, after.data)
 	assert.Equal(t, "", after.err)
 	assert.NoError(t, err)
@@ -1498,7 +1498,6 @@ func TestExecutionEngineV2_GetCachedPlan(t *testing.T) {
 }
 
 func BenchmarkExecutionEngineV2(b *testing.B) {
-
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -1573,7 +1572,6 @@ func BenchmarkExecutionEngineV2(b *testing.B) {
 			pool.Put(bc)
 		}
 	})
-
 }
 
 type federationSetup struct {

@@ -97,7 +97,7 @@ func TestFederationIntegrationTest(t *testing.T) {
 
 	t.Run("interface query", func(t *testing.T) {
 		resp := gqlClient.Query(ctx, setup.gatewayServer.URL, path.Join("testdata", "queries/interface.query"), nil, t)
-		assert.Equal(t, `{"data":{"me":{"username":"Me","history":[{"wallet":{"amount":123,"specialField1":"some special value 1"}},{"rating":5},{"wallet":{"amount":123,"specialField2":"some special value 2"}}]}}}`, string(resp))
+		assert.Equal(t, `{"data":{"me":{"username":"Me","history":[{"wallet":{"specialField1":"some special value 1","amount":123}},{"rating":5},{"wallet":{"specialField2":"some special value 2","amount":123}}]}}}`, string(resp))
 	})
 
 	t.Run("subscription query through WebSocket transport", func(t *testing.T) {

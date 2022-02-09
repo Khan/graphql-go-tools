@@ -54,7 +54,6 @@ func TestPlanner_Plan(t *testing.T) {
 			}
 
 			assert.Equal(t, toJson(expectedPlan), toJson(plan))
-
 		}
 	}
 
@@ -139,9 +138,21 @@ func TestPlanner_Plan(t *testing.T) {
 														Path: []string{"name"},
 													},
 													Position: resolve.Position{
-														Line:   7,
-														Column: 6,
+														Line:   0,
+														Column: 0,
 													},
+													OnTypeName: []byte("Human"),
+												},
+												{
+													Name: []byte("name"),
+													Value: &resolve.String{
+														Path: []string{"name"},
+													},
+													Position: resolve.Position{
+														Line:   0,
+														Column: 0,
+													},
+													OnTypeName: []byte("Droid"),
 												},
 											},
 										},
@@ -168,9 +179,21 @@ func TestPlanner_Plan(t *testing.T) {
 														Path: []string{"name"},
 													},
 													Position: resolve.Position{
-														Line:   10,
-														Column: 6,
+														Line:   0,
+														Column: 0,
 													},
+													OnTypeName: []byte("Human"),
+												},
+												{
+													Name: []byte("name"),
+													Value: &resolve.String{
+														Path: []string{"name"},
+													},
+													Position: resolve.Position{
+														Line:   0,
+														Column: 0,
+													},
+													OnTypeName: []byte("Droid"),
 												},
 											},
 										},
@@ -287,7 +310,6 @@ func TestPlanner_Plan(t *testing.T) {
 			`, "", Configuration{},
 		))
 	})
-
 }
 
 var expectedMyHeroPlan = &SynchronousResponsePlan{
@@ -311,9 +333,21 @@ var expectedMyHeroPlan = &SynchronousResponsePlan{
 									Path: []string{"name"},
 								},
 								Position: resolve.Position{
-									Line:   4,
-									Column: 7,
+									Line:   0,
+									Column: 0,
 								},
+								OnTypeName: []byte("Human"),
+							},
+							{
+								Name: []byte("name"),
+								Value: &resolve.String{
+									Path: []string{"name"},
+								},
+								Position: resolve.Position{
+									Line:   0,
+									Column: 0,
+								},
+								OnTypeName: []byte("Droid"),
 							},
 						},
 					},
@@ -344,9 +378,21 @@ var expectedMyHeroPlanWithFragment = &SynchronousResponsePlan{
 									Path: []string{"name"},
 								},
 								Position: resolve.Position{
-									Line:   3,
-									Column: 6,
+									Line:   0,
+									Column: 0,
 								},
+								OnTypeName: []byte("Human"),
+							},
+							{
+								Name: []byte("name"),
+								Value: &resolve.String{
+									Path: []string{"name"},
+								},
+								Position: resolve.Position{
+									Line:   0,
+									Column: 0,
+								},
+								OnTypeName: []byte("Droid"),
 							},
 						},
 					},

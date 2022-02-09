@@ -128,7 +128,7 @@ func TestExecutionEngine_ExecuteWithOptions(t *testing.T) {
 			expectedHost:     "example.com",
 			expectedPath:     "/",
 			expectedBody:     "",
-			sendResponseBody: `{"hero": {"name": "Luke Skywalker"}}`,
+			sendResponseBody: `{"hero": {"__typename": "Human", "name": "Luke Skywalker"}}`,
 			sendStatusCode:   200,
 		}),
 		expectedResponse: `{"data":{"hero":{"name":"Luke Skywalker"}}}`,
@@ -144,7 +144,7 @@ func TestExecutionEngine_ExecuteWithOptions(t *testing.T) {
 			expectedHost:     "example.com",
 			expectedPath:     "/",
 			expectedBody:     "",
-			sendResponseBody: `{"hero": {"name": "Luke Skywalker"}}`,
+			sendResponseBody: `{"hero": {"__typename": "Human", "name": "Luke Skywalker"}}`,
 			sendStatusCode:   200,
 		}),
 		expectedResponse: "",
@@ -158,7 +158,7 @@ func TestExecutionEngine_ExecuteWithOptions(t *testing.T) {
 			expectedHost:     "example.com",
 			expectedPath:     "/",
 			expectedBody:     "",
-			sendResponseBody: `{"data":{"hero":{"name":"Luke Skywalker"}}}`,
+			sendResponseBody: `{"data":{"hero":{"__typename": "Human", "name":"Luke Skywalker"}}}`,
 			sendStatusCode:   200,
 		}),
 		expectedResponse: `{"data":{"hero":{"name":"Luke Skywalker"}}}`,
@@ -176,7 +176,7 @@ func TestExecutionEngine_ExecuteWithOptions(t *testing.T) {
 			expectedHost:     "example.com",
 			expectedPath:     "/",
 			expectedBody:     "",
-			sendResponseBody: `{"data":{"hero":{"name":"Luke Skywalker"}}}`,
+			sendResponseBody: `{"data":{"hero":{"__typename": "Human", "name":"Luke Skywalker"}}}`,
 			sendStatusCode:   200,
 		}),
 		expectedResponse: `{"data":{"hero":{"name":"Luke Skywalker"}}}`,
@@ -190,7 +190,7 @@ func TestExecutionEngine_ExecuteWithOptions(t *testing.T) {
 			expectedHost:     "example.com",
 			expectedPath:     "/",
 			expectedBody:     "",
-			sendResponseBody: `{"data":{"droid":{"name":"R2D2"}}}`,
+			sendResponseBody: `{"data":{"__typename": "Droid", "droid":{"name":"R2D2"}}}`,
 			sendStatusCode:   200,
 		}),
 		preExecutionTasks: normalizeAndValidatePreExecutionTasks,
@@ -205,7 +205,7 @@ func TestExecutionEngine_ExecuteWithOptions(t *testing.T) {
 			expectedHost:     "example.com",
 			expectedPath:     "/",
 			expectedBody:     "",
-			sendResponseBody: `{"data":{"droid":{"name":"R2D2"}}}`,
+			sendResponseBody: `{"data":{"__typename": "Droid", "droid":{"name":"R2D2"}}}`,
 			sendStatusCode:   200,
 		}),
 		preExecutionTasks: normalizeAndValidatePreExecutionTasks,
@@ -377,7 +377,6 @@ func heroWithArgumentSchema(t *testing.T) *Schema {
 }
 
 func TestExampleExecutionEngine_Concatenation(t *testing.T) {
-
 	schema, err := NewSchemaFromString(`
 		schema { query: Query }
 		type Query { friend: Friend }
@@ -454,7 +453,6 @@ func TestExampleExecutionEngine_Concatenation(t *testing.T) {
 }
 
 func BenchmarkExecutionEngine(b *testing.B) {
-
 	newEngine := func() *ExecutionEngine {
 		schema, err := NewSchemaFromString(`type Query { hello: String}`)
 		assert.NoError(b, err)
