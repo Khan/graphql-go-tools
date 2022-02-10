@@ -37,6 +37,12 @@ func (d *deleteInvalidInlineFragmentsVisitor) EnterSelectionSet(ref int) {
 
 		inlineFragment := d.operation.Selections[selections[index]].Ref
 
+		// Delete empty inline fragments
+		if !d.operation.InlineFragments[inlineFragment].HasSelections {
+			d.operation.RemoveFromSelectionSet(ref, index)
+			continue
+		}
+
 		typeName := d.operation.InlineFragmentTypeConditionName(inlineFragment)
 
 		node, exists := d.definition.Index.FirstNonExtensionNodeByNameBytes(typeName)

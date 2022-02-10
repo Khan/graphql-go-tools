@@ -130,8 +130,10 @@ func (a ArgumentsConfigurations) ForName(argName string) *ArgumentConfiguration 
 	return nil
 }
 
-type SourceType string
-type ArgumentRenderConfig string
+type (
+	SourceType           string
+	ArgumentRenderConfig string
+)
 
 const (
 	ObjectFieldSource            SourceType           = "object_field"
@@ -208,7 +210,6 @@ type FieldMapping struct {
 // At the time when the resolver and all operations should be garbage collected, ensure to first cancel or timeout the ctx object
 // If you don't cancel the context.Context, the goroutines will run indefinitely and there's no reference left to stop them
 func NewPlanner(ctx context.Context, config Configuration) *Planner {
-
 	// required fields pre-processing
 
 	requiredFieldsWalker := astvisitor.NewWalker(48)
@@ -216,7 +217,7 @@ func NewPlanner(ctx context.Context, config Configuration) *Planner {
 		walker: &requiredFieldsWalker,
 	}
 
-	requiredFieldsWalker.RegisterEnterDocumentVisitor(requiredFieldsV)
+	requiredFieldsWalker.RegisterDocumentVisitor(requiredFieldsV)
 	requiredFieldsWalker.RegisterEnterOperationVisitor(requiredFieldsV)
 	requiredFieldsWalker.RegisterEnterFieldVisitor(requiredFieldsV)
 
@@ -258,7 +259,6 @@ func (p *Planner) SetConfig(config Configuration) {
 }
 
 func (p *Planner) Plan(operation, definition *ast.Document, operationName string, report *operationreport.Report) (plan Plan) {
-
 	// make a copy of the config as the pre-processor modifies it
 
 	config := p.config
@@ -313,7 +313,6 @@ func (p *Planner) Plan(operation, definition *ast.Document, operationName string
 }
 
 func (p *Planner) selectOperation(operation *ast.Document, operationName string, report *operationreport.Report) {
-
 	numOfOperations := operation.NumOfOperationDefinitions()
 	operationName = strings.TrimSpace(operationName)
 	if len(operationName) == 0 && numOfOperations > 1 {
@@ -369,7 +368,7 @@ type Visitor struct {
 	planners              []plannerConfiguration
 	fetchConfigurations   []objectFetchConfiguration
 	fieldBuffers          map[int]int
-	skipFieldPaths        []string
+	skipFieldPaths        []typedPath
 	fieldConfigs          map[int]*FieldConfiguration
 	exportedVariables     map[string]struct{}
 	skipIncludeFields     map[int]skipIncludeField
@@ -561,20 +560,18 @@ func (v *Visitor) EnterInlineFragment(ref int) {
 }
 
 func (v *Visitor) LeaveInlineFragment(ref int) {
-
 }
 
 func (v *Visitor) EnterSelectionSet(ref int) {
-
 }
 
 func (v *Visitor) LeaveSelectionSet(ref int) {
-
 }
 
 func (v *Visitor) EnterField(ref int) {
+	typeName := v.Walker.EnclosingTypeDefinition.NameString(v.Definition)
 
-	if v.skipField(ref) {
+	if v.skipField(typeName, ref) {
 		return
 	}
 
@@ -648,7 +645,6 @@ func (v *Visitor) EnterField(ref int) {
 
 	*v.currentFields[len(v.currentFields)-1].fields = append(*v.currentFields[len(v.currentFields)-1].fields, v.currentField)
 
-	typeName := v.Walker.EnclosingTypeDefinition.NameString(v.Definition)
 	fieldNameStr := v.Operation.FieldNameString(ref)
 	fieldConfig := v.Config.Fields.ForTypeField(typeName, fieldNameStr)
 	if fieldConfig == nil {
@@ -658,7 +654,7 @@ func (v *Visitor) EnterField(ref int) {
 }
 
 func (v *Visitor) resolveSkipForField(ref int) (bool, string) {
-	skipInclude,ok := v.skipIncludeFields[ref]
+	skipInclude, ok := v.skipIncludeFields[ref]
 	if ok {
 		return skipInclude.skip, skipInclude.skipVariableName
 	}
@@ -666,7 +662,7 @@ func (v *Visitor) resolveSkipForField(ref int) (bool, string) {
 }
 
 func (v *Visitor) resolveIncludeForField(ref int) (bool, string) {
-	skipInclude,ok := v.skipIncludeFields[ref]
+	skipInclude, ok := v.skipIncludeFields[ref]
 	if ok {
 		return skipInclude.include, skipInclude.includeVariableName
 	}
@@ -728,10 +724,13 @@ func (v *Visitor) LeaveField(ref int) {
 	}
 }
 
-func (v *Visitor) skipField(ref int) bool {
-	fullPath := v.Walker.Path.DotDelimitedString() + "." + v.Operation.FieldAliasOrNameString(ref)
+func (v *Visitor) skipField(typeName string, ref int) bool {
+	path := typedPath{
+		typeName: typeName,
+		path:     v.Walker.Path.DotDelimitedString() + "." + v.Operation.FieldAliasOrNameString(ref),
+	}
 	for i := range v.skipFieldPaths {
-		if v.skipFieldPaths[i] == fullPath {
+		if v.skipFieldPaths[i] == path {
 			return true
 		}
 	}
@@ -1058,9 +1057,7 @@ func (v *Visitor) resolveInputTemplates(config objectFetchConfiguration, input *
 			return s
 		}
 		path := parts[1:]
-		var (
-			variableName string
-		)
+		var variableName string
 		switch parts[0] {
 		case "object":
 			variable := &resolve.ObjectVariable{
@@ -1561,9 +1558,7 @@ func (c *configurationVisitor) EnterField(ref int) {
 	}
 	for i, config := range c.config.DataSources {
 		if config.HasRootNode(typeName, fieldName) {
-			var (
-				bufferID int
-			)
+			var bufferID int
 			if !isSubscription {
 				bufferID = c.nextBufferID()
 				c.fieldBuffers[ref] = bufferID
@@ -1638,21 +1633,51 @@ func (c *configurationVisitor) isSubscription(root int, path string) bool {
 	return strings.Count(path, ".") == 1
 }
 
+type typedPath struct {
+	typeName string
+	path     string
+}
+
 type requiredFieldsVisitor struct {
 	operation, definition *ast.Document
 	walker                *astvisitor.Walker
 	config                *Configuration
 	operationName         string
-	skipFieldPaths        []string
+	fieldRefsSeen         map[int]bool
+	addedFieldCounts      map[typedPath]int
+	selectedFieldCounts   map[typedPath]int
+	skipFieldPaths        []typedPath
 }
 
 func (r *requiredFieldsVisitor) EnterDocument(operation, definition *ast.Document) {
+	r.fieldRefsSeen = make(map[int]bool)
+	r.addedFieldCounts = make(map[typedPath]int)
+	r.selectedFieldCounts = make(map[typedPath]int)
 	r.skipFieldPaths = r.skipFieldPaths[:0]
+}
+
+func (r *requiredFieldsVisitor) LeaveDocument(operation, definition *ast.Document) {
+	for path, addedCount := range r.addedFieldCounts {
+		if r.selectedFieldCounts[path] == addedCount {
+			r.skipFieldPaths = append(r.skipFieldPaths, path)
+		}
+	}
 }
 
 func (r *requiredFieldsVisitor) EnterField(ref int) {
 	typeName := r.walker.EnclosingTypeDefinition.NameString(r.definition)
 	fieldName := r.operation.FieldNameUnsafeString(ref)
+	selectedFieldName := r.operation.FieldAliasOrNameString(ref)
+	selectedFieldPath := r.walker.Path.DotDelimitedString() + "." + selectedFieldName
+
+	// When a required field is added to the selection set below, the visitor
+	// detects the change to the selection set refs and visitors all the
+	// selection set fields again. We don't want to double count these fields.
+	if !r.fieldRefsSeen[ref] {
+		r.selectedFieldCounts[typedPath{typeName: typeName, path: selectedFieldPath}] += 1
+		r.fieldRefsSeen[ref] = true
+	}
+
 	fieldConfig := r.config.Fields.ForTypeField(typeName, fieldName)
 	if fieldConfig == nil {
 		return
@@ -1665,11 +1690,11 @@ func (r *requiredFieldsVisitor) EnterField(ref int) {
 		return
 	}
 	for i := range fieldConfig.RequiresFields {
-		r.handleRequiredField(selectionSet.Ref, fieldConfig.RequiresFields[i])
+		r.handleRequiredField(selectionSet.Ref, typeName, fieldConfig.RequiresFields[i])
 	}
 }
 
-func (r *requiredFieldsVisitor) handleRequiredField(selectionSet int, requiredFieldName string) {
+func (r *requiredFieldsVisitor) handleRequiredField(selectionSet int, typeName string, requiredFieldName string) {
 	for _, ref := range r.operation.SelectionSets[selectionSet].SelectionRefs {
 		selection := r.operation.Selections[ref]
 		if selection.Kind != ast.SelectionKindField {
@@ -1681,10 +1706,10 @@ func (r *requiredFieldsVisitor) handleRequiredField(selectionSet int, requiredFi
 			return
 		}
 	}
-	r.addRequiredField(requiredFieldName, selectionSet)
+	r.addRequiredField(typeName, requiredFieldName, selectionSet)
 }
 
-func (r *requiredFieldsVisitor) addRequiredField(fieldName string, selectionSet int) {
+func (r *requiredFieldsVisitor) addRequiredField(typeName string, fieldName string, selectionSet int) {
 	field := ast.Field{
 		Name: r.operation.Input.AppendInputString(fieldName),
 	}
@@ -1695,7 +1720,8 @@ func (r *requiredFieldsVisitor) addRequiredField(fieldName string, selectionSet 
 	}
 	r.operation.AddSelection(selectionSet, selection)
 	addedFieldPath := r.walker.Path.DotDelimitedString() + "." + fieldName
-	r.skipFieldPaths = append(r.skipFieldPaths, addedFieldPath)
+
+	r.addedFieldCounts[typedPath{typeName: typeName, path: addedFieldPath}] += 1
 }
 
 func (r *requiredFieldsVisitor) EnterOperationDefinition(ref int) {
