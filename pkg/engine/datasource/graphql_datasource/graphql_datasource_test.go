@@ -5539,6 +5539,235 @@ func TestGraphQLDataSource(t *testing.T) {
 			},
 		}))
 
+	t.Run("federated interface key selection only", RunTest(
+		`
+		type Query {
+			user: User
+		}
+
+		type User {
+			username: String!
+			pets: [Pet!]!
+		}
+
+		interface Pet {
+			id: ID!
+			name: String!
+		}
+
+		type Cat implements Pet {
+			id: ID!
+			name: String!
+		}
+
+		type Dog implements Pet {
+			id: ID!
+			name: String!
+		}
+		`,
+		`
+		query testQuery {
+			user {
+				pets {
+					id
+				}
+			}
+		}
+		`,
+		"testQuery",
+		&plan.SynchronousResponsePlan{
+			Response: &resolve.GraphQLResponse{
+				Data: &resolve.Object{
+					Fetch: &resolve.SingleFetch{
+						BufferId:              0,
+						Input:                 `{"method":"POST","url":"http://user.service","body":{"query":"{user {pets {__typename ... on Cat {id} ... on Dog {id}}}}"}}`,
+						DataSource:            &Source{},
+						DataSourceIdentifier:  []byte("graphql_datasource.Source"),
+						ProcessResponseConfig: resolve.ProcessResponseConfig{ExtractGraphqlResponse: true},
+					},
+					Fields: []*resolve.Field{
+						{
+							HasBuffer: true,
+							BufferID:  0,
+							Name:      []byte("user"),
+							Position: resolve.Position{
+								Line:   3,
+								Column: 4,
+							},
+							Value: &resolve.Object{
+								Path:     []string{"user"},
+								Nullable: true,
+								Fields: []*resolve.Field{
+									{
+										Name: []byte("pets"),
+										Position: resolve.Position{
+											Line:   4,
+											Column: 5,
+										},
+										Value: &resolve.Array{
+											Path:     []string{"pets"},
+											Nullable: false,
+											Item: &resolve.Object{
+												Nullable: false,
+												Fields: []*resolve.Field{
+													{
+														Name: []byte("id"),
+														Position: resolve.Position{
+															Line:   0,
+															Column: 0,
+														},
+														Value: &resolve.String{
+															Path: []string{"id"},
+														},
+														OnTypeName: []byte("Cat"),
+													},
+													{
+														Name: []byte("id"),
+														Position: resolve.Position{
+															Line:   0,
+															Column: 0,
+														},
+														Value: &resolve.String{
+															Path: []string{"id"},
+														},
+														OnTypeName: []byte("Dog"),
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		plan.Configuration{
+			DataSources: []plan.DataSourceConfiguration{
+				{
+					RootNodes: []plan.TypeField{
+						{
+							TypeName:   "Query",
+							FieldNames: []string{"user"},
+						},
+					},
+					ChildNodes: []plan.TypeField{
+						{
+							TypeName:   "User",
+							FieldNames: []string{"username", "pets"},
+						},
+						{
+							TypeName:   "Cat",
+							FieldNames: []string{"id"},
+						},
+						{
+							TypeName:   "Dog",
+							FieldNames: []string{"id"},
+						},
+						{
+							TypeName:   "Pet",
+							FieldNames: []string{"id"},
+						},
+					},
+					Custom: ConfigJson(Configuration{
+						Fetch: FetchConfiguration{
+							URL: "http://user.service",
+						},
+						Federation: FederationConfiguration{
+							Enabled: true,
+							ServiceSDL: `
+								extend type Query {
+									user: User
+								}
+
+								type House {
+									username: String!
+									pets: [Pet!]!
+								}
+
+								extend interface Pet {
+									id: ID! @external
+								}
+
+								extend type Cat implements Pet @key(fields: "id") {
+									id: ID! @external
+								}
+
+								extend type Dog implements Pet @key(fields: "id") {
+									id: ID! @external
+								}
+							`,
+						},
+					}),
+					Factory: federationFactory,
+				},
+				{
+					RootNodes: []plan.TypeField{
+						{
+							TypeName:   "Cat",
+							FieldNames: []string{"id", "name"},
+						},
+						{
+							TypeName:   "Dog",
+							FieldNames: []string{"id", "name"},
+						},
+					},
+					ChildNodes: []plan.TypeField{
+						{
+							TypeName:   "Cat",
+							FieldNames: []string{"id", "name"},
+						},
+						{
+							TypeName:   "Dog",
+							FieldNames: []string{"id", "name"},
+						},
+						{
+							TypeName:   "Pet",
+							FieldNames: []string{"id", "name"},
+						},
+					},
+					Custom: ConfigJson(Configuration{
+						Fetch: FetchConfiguration{
+							URL: "http://pet.service",
+						},
+						Federation: FederationConfiguration{
+							Enabled: true,
+							ServiceSDL: `
+								interface Pet {
+									id: ID!
+									name: String!,
+								}
+
+								type Cat implements Pet @key(fields: "id") {
+									id: ID!
+									name: String!
+								}
+
+								type Dog implements Pet @key(fields: "id") {
+									id: ID!
+									name: String!
+								}
+							`,
+						},
+					}),
+					Factory: federationFactory,
+				},
+			},
+			Fields: []plan.FieldConfiguration{
+				{
+					TypeName:       "Cat",
+					FieldName:      "name",
+					RequiresFields: []string{"id"},
+				},
+				{
+					TypeName:       "Dog",
+					FieldName:      "name",
+					RequiresFields: []string{"id"},
+				},
+			},
+		}))
+
 	t.Run("federated interface with concrete types that have different keys", RunTest(
 		`
 		type Query {
@@ -7301,6 +7530,553 @@ func TestGraphQLDataSource(t *testing.T) {
 				{
 					TypeName:       "Dog",
 					FieldName:      "dogField",
+					RequiresFields: []string{"id"},
+				},
+			},
+		}))
+
+	t.Run("required field included when in shared selection but not fragment", RunTest(
+		`
+		type Query {
+			user: User
+		}
+
+		type User {
+			username: String!
+			pets: [Pet!]!
+		}
+
+		interface Pet {
+			id: ID!
+			name: String!
+		}
+
+		type Cat implements Pet {
+			id: ID!
+			name: String!
+		}
+
+		type Dog implements Pet {
+			id: ID!
+			name: String!
+		}
+		`,
+		`
+		query testQuery {
+			user {
+				pets {
+					id
+					... on Dog {
+						name  # requires "id"
+					}
+				}
+			}
+		}
+		`,
+		"testQuery",
+		&plan.SynchronousResponsePlan{
+			Response: &resolve.GraphQLResponse{
+				Data: &resolve.Object{
+					Fetch: &resolve.SingleFetch{
+						BufferId:              0,
+						Input:                 `{"method":"POST","url":"http://user.service","body":{"query":"{user {pets {__typename ... on Dog {id} ... on Cat {id} ... on Dog {id}}}}"}}`,
+						DataSource:            &Source{},
+						DataSourceIdentifier:  []byte("graphql_datasource.Source"),
+						ProcessResponseConfig: resolve.ProcessResponseConfig{ExtractGraphqlResponse: true},
+					},
+					Fields: []*resolve.Field{
+						{
+							HasBuffer: true,
+							BufferID:  0,
+							Name:      []byte("user"),
+							Position: resolve.Position{
+								Line:   3,
+								Column: 4,
+							},
+							Value: &resolve.Object{
+								Path:     []string{"user"},
+								Nullable: true,
+								Fields: []*resolve.Field{
+									{
+										Name: []byte("pets"),
+										Position: resolve.Position{
+											Line:   4,
+											Column: 5,
+										},
+										Value: &resolve.Array{
+											Path:     []string{"pets"},
+											Nullable: false,
+											Item: &resolve.Object{
+												Fetch: &resolve.BatchFetch{
+													Fetch: &resolve.SingleFetch{
+														BufferId: 1,
+														Input:    `{"method":"POST","url":"http://pet.service","body":{"query":"query($representations: [_Any!]!){_entities(representations: $representations){__typename ... on Dog {name}}}","variables":{"representations":[{"id":$$1$$,"__typename":$$0$$}]}}}`,
+														Variables: resolve.NewVariables(
+															&resolve.ObjectVariable{
+																Path:     []string{"__typename"},
+																Renderer: resolve.NewJSONVariableRenderer(),
+															},
+															&resolve.ObjectVariable{
+																Path:     []string{"id"},
+																Renderer: resolve.NewJSONVariableRendererWithValidation(`{"type":["string","integer"]}`),
+															},
+														),
+														DataSource:           &Source{},
+														DataSourceIdentifier: []byte("graphql_datasource.Source"),
+														ProcessResponseConfig: resolve.ProcessResponseConfig{
+															ExtractGraphqlResponse:    true,
+															ExtractFederationEntities: true,
+														},
+													},
+													BatchFactory: batchFactory,
+												},
+												Nullable: false,
+												Fields: []*resolve.Field{
+													{
+														HasBuffer: true,
+														BufferID:  1,
+														Name:      []byte("name"),
+														Position: resolve.Position{
+															Line:   7,
+															Column: 7,
+														},
+														Value: &resolve.String{
+															Path: []string{"name"},
+														},
+														OnTypeName: []byte("Dog"),
+													},
+													{
+														// No buffer because "id" comes from the parent fetch.
+														Name: []byte("id"),
+														Position: resolve.Position{
+															Line:   0,
+															Column: 0,
+														},
+														Value: &resolve.String{
+															Path: []string{"id"},
+														},
+														OnTypeName: []byte("Dog"),
+													},
+													{
+														// No buffer because "id" comes from the parent fetch.
+														Name: []byte("id"),
+														Position: resolve.Position{
+															Line:   0,
+															Column: 0,
+														},
+														Value: &resolve.String{
+															Path: []string{"id"},
+														},
+														OnTypeName: []byte("Cat"),
+													},
+													{
+														// No buffer because "id" comes from the parent fetch.
+														//
+														// Note: this field is resolved twice because it's selected twice
+														// (once as a required field and once as an explicit selection).
+														//
+														// TODO: skip identical fields.
+														Name: []byte("id"),
+														Position: resolve.Position{
+															Line:   0,
+															Column: 0,
+														},
+														Value: &resolve.String{
+															Path: []string{"id"},
+														},
+														OnTypeName: []byte("Dog"),
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		plan.Configuration{
+			DataSources: []plan.DataSourceConfiguration{
+				{
+					RootNodes: []plan.TypeField{
+						{
+							TypeName:   "Query",
+							FieldNames: []string{"user"},
+						},
+					},
+					ChildNodes: []plan.TypeField{
+						{
+							TypeName:   "User",
+							FieldNames: []string{"username", "pets"},
+						},
+						{
+							TypeName:   "Cat",
+							FieldNames: []string{"id"},
+						},
+						{
+							TypeName:   "Dog",
+							FieldNames: []string{"id"},
+						},
+						{
+							TypeName:   "Pet",
+							FieldNames: []string{"id"},
+						},
+					},
+					Custom: ConfigJson(Configuration{
+						Fetch: FetchConfiguration{
+							URL: "http://user.service",
+						},
+						Federation: FederationConfiguration{
+							Enabled: true,
+							ServiceSDL: `
+								extend type Query {
+									user: User
+								}
+
+								type House {
+									username: String!
+									pets: [Pet!]!
+								}
+
+								extend interface Pet {
+									id: ID! @external
+								}
+
+								extend type Cat implements Pet @key(fields: "id") {
+									id: ID! @external
+								}
+
+								extend type Dog implements Pet @key(fields: "id") {
+									id: ID! @external
+								}
+							`,
+						},
+					}),
+					Factory: federationFactory,
+				},
+				{
+					RootNodes: []plan.TypeField{
+						{
+							TypeName:   "Cat",
+							FieldNames: []string{"id", "name"},
+						},
+						{
+							TypeName:   "Dog",
+							FieldNames: []string{"id", "name"},
+						},
+					},
+					ChildNodes: []plan.TypeField{
+						{
+							TypeName:   "Cat",
+							FieldNames: []string{"id", "name"},
+						},
+						{
+							TypeName:   "Dog",
+							FieldNames: []string{"id", "name"},
+						},
+						{
+							TypeName:   "Pet",
+							FieldNames: []string{"id", "name"},
+						},
+					},
+					Custom: ConfigJson(Configuration{
+						Fetch: FetchConfiguration{
+							URL: "http://pet.service",
+						},
+						Federation: FederationConfiguration{
+							Enabled: true,
+							ServiceSDL: `
+								interface Pet {
+									id: ID!
+									name: String!,
+								}
+
+								type Cat implements Pet @key(fields: "id") {
+									id: ID!
+									name: String!
+								}
+
+								type Dog implements Pet @key(fields: "id") {
+									id: ID!
+									name: String!
+								}
+							`,
+						},
+					}),
+					Factory: federationFactory,
+				},
+			},
+			Fields: []plan.FieldConfiguration{
+				{
+					TypeName:       "Cat",
+					FieldName:      "name",
+					RequiresFields: []string{"id"},
+				},
+				{
+					TypeName:       "Dog",
+					FieldName:      "name",
+					RequiresFields: []string{"id"},
+				},
+			},
+		}))
+
+	t.Run("required field included when not selected in sibling fragment", RunTest(
+		`
+		type Query {
+			user: User
+		}
+
+		type User {
+			username: String!
+			pets: [Pet!]!
+		}
+
+		interface Pet {
+			id: ID!
+			name: String!
+		}
+
+		type Cat implements Pet {
+			id: ID!
+			name: String!
+		}
+
+		type Dog implements Pet {
+			id: ID!
+			name: String!
+		}
+		`,
+		`
+		query testQuery {
+			user {
+				pets {
+					... on Cat {
+						id
+					}
+					... on Dog {
+						name  # requires "id"
+					}
+				}
+			}
+		}
+		`,
+		"testQuery",
+		&plan.SynchronousResponsePlan{
+			Response: &resolve.GraphQLResponse{
+				Data: &resolve.Object{
+					Fetch: &resolve.SingleFetch{
+						BufferId:              0,
+						Input:                 `{"method":"POST","url":"http://user.service","body":{"query":"{user {pets {__typename ... on Cat {id} ... on Dog {id}}}}"}}`,
+						DataSource:            &Source{},
+						DataSourceIdentifier:  []byte("graphql_datasource.Source"),
+						ProcessResponseConfig: resolve.ProcessResponseConfig{ExtractGraphqlResponse: true},
+					},
+					Fields: []*resolve.Field{
+						{
+							HasBuffer: true,
+							BufferID:  0,
+							Name:      []byte("user"),
+							Position: resolve.Position{
+								Line:   3,
+								Column: 4,
+							},
+							Value: &resolve.Object{
+								Path:     []string{"user"},
+								Nullable: true,
+								Fields: []*resolve.Field{
+									{
+										Name: []byte("pets"),
+										Position: resolve.Position{
+											Line:   4,
+											Column: 5,
+										},
+										Value: &resolve.Array{
+											Path:     []string{"pets"},
+											Nullable: false,
+											Item: &resolve.Object{
+												Fetch: &resolve.BatchFetch{
+													Fetch: &resolve.SingleFetch{
+														BufferId: 1,
+														Input:    `{"method":"POST","url":"http://pet.service","body":{"query":"query($representations: [_Any!]!){_entities(representations: $representations){__typename ... on Dog {name}}}","variables":{"representations":[{"id":$$1$$,"__typename":$$0$$}]}}}`,
+														Variables: resolve.NewVariables(
+															&resolve.ObjectVariable{
+																Path:     []string{"__typename"},
+																Renderer: resolve.NewJSONVariableRenderer(),
+															},
+															&resolve.ObjectVariable{
+																Path:     []string{"id"},
+																Renderer: resolve.NewJSONVariableRendererWithValidation(`{"type":["string","integer"]}`),
+															},
+														),
+														DataSource:           &Source{},
+														DataSourceIdentifier: []byte("graphql_datasource.Source"),
+														ProcessResponseConfig: resolve.ProcessResponseConfig{
+															ExtractGraphqlResponse:    true,
+															ExtractFederationEntities: true,
+														},
+													},
+													BatchFactory: batchFactory,
+												},
+												Nullable: false,
+												Fields: []*resolve.Field{
+													{
+														// No buffer because "id" comes from the parent fetch.
+														Name: []byte("id"),
+														Position: resolve.Position{
+															Line:   6,
+															Column: 7,
+														},
+														Value: &resolve.String{
+															Path: []string{"id"},
+														},
+														OnTypeName: []byte("Cat"),
+													},
+													{
+														HasBuffer: true,
+														BufferID:  1,
+														Name:      []byte("name"),
+														Position: resolve.Position{
+															Line:   9,
+															Column: 7,
+														},
+														Value: &resolve.String{
+															Path: []string{"name"},
+														},
+														OnTypeName: []byte("Dog"),
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		plan.Configuration{
+			DataSources: []plan.DataSourceConfiguration{
+				{
+					RootNodes: []plan.TypeField{
+						{
+							TypeName:   "Query",
+							FieldNames: []string{"user"},
+						},
+					},
+					ChildNodes: []plan.TypeField{
+						{
+							TypeName:   "User",
+							FieldNames: []string{"username", "pets"},
+						},
+						{
+							TypeName:   "Cat",
+							FieldNames: []string{"id"},
+						},
+						{
+							TypeName:   "Dog",
+							FieldNames: []string{"id"},
+						},
+						{
+							TypeName:   "Pet",
+							FieldNames: []string{"id"},
+						},
+					},
+					Custom: ConfigJson(Configuration{
+						Fetch: FetchConfiguration{
+							URL: "http://user.service",
+						},
+						Federation: FederationConfiguration{
+							Enabled: true,
+							ServiceSDL: `
+								extend type Query {
+									user: User
+								}
+
+								type House {
+									username: String!
+									pets: [Pet!]!
+								}
+
+								extend interface Pet {
+									id: ID! @external
+								}
+
+								extend type Cat implements Pet @key(fields: "id") {
+									id: ID! @external
+								}
+
+								extend type Dog implements Pet @key(fields: "id") {
+									id: ID! @external
+								}
+							`,
+						},
+					}),
+					Factory: federationFactory,
+				},
+				{
+					RootNodes: []plan.TypeField{
+						{
+							TypeName:   "Cat",
+							FieldNames: []string{"id", "name"},
+						},
+						{
+							TypeName:   "Dog",
+							FieldNames: []string{"id", "name"},
+						},
+					},
+					ChildNodes: []plan.TypeField{
+						{
+							TypeName:   "Cat",
+							FieldNames: []string{"id", "name"},
+						},
+						{
+							TypeName:   "Dog",
+							FieldNames: []string{"id", "name"},
+						},
+						{
+							TypeName:   "Pet",
+							FieldNames: []string{"id", "name"},
+						},
+					},
+					Custom: ConfigJson(Configuration{
+						Fetch: FetchConfiguration{
+							URL: "http://pet.service",
+						},
+						Federation: FederationConfiguration{
+							Enabled: true,
+							ServiceSDL: `
+								interface Pet {
+									id: ID!
+									name: String!,
+								}
+
+								type Cat implements Pet @key(fields: "id") {
+									id: ID!
+									name: String!
+								}
+
+								type Dog implements Pet @key(fields: "id") {
+									id: ID!
+									name: String!
+								}
+							`,
+						},
+					}),
+					Factory: federationFactory,
+				},
+			},
+			Fields: []plan.FieldConfiguration{
+				{
+					TypeName:       "Cat",
+					FieldName:      "name",
+					RequiresFields: []string{"id"},
+				},
+				{
+					TypeName:       "Dog",
+					FieldName:      "name",
 					RequiresFields: []string{"id"},
 				},
 			},
