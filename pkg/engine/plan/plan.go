@@ -411,6 +411,79 @@ func (v *Visitor) AllowVisitor(kind astvisitor.VisitorKind, ref int, visitor int
 		return true
 	}
 	for _, config := range v.planners {
+		// In the following query:
+		//
+		// query testQuery {
+		//     user {
+		//         username
+		//         pets {
+		//             name
+		//             ... on Cat {
+		//                 catField
+		//             }
+		//             ... on Dog {
+		//                 dogField
+		//             }
+		//         }
+		//     }
+		// }
+		//
+		// where the "user" service has the parent "" and resolves:
+		// - user
+		// - user.username
+		// - user.pets
+		//
+		// and the "pet" service has the parent "user.pets" and resolves:
+		// - user.pets.name
+		// - user.pets.catField
+		// - user.pets.dogField
+		//
+		// when constructing the "pets" upstream operation, we want to include
+		// the `... on Cat` and `... and Dog` fragments and the corresponding
+		// selection sets, both of which have the path "user.pets". We
+		// therefore allow the pets planner to visit inline fragments and
+		// selection sets when the parent matches UNLESS the selection set is
+		// the "user.pets" selection set itself; the "pets" planner already has
+		// a created selection set in that case, and visiting another selection
+		// set doesn't make any sense. (Note that "selection set" in this
+		// context is literally just the curly braces--everything inside is
+		// still visited.)
+		//
+		// To be clear, we want the "pets" planner to visit the following nodes
+		// indicated by a ^.
+		//
+		// query testQuery {          (path: "")
+		// ^               ^
+		//     user {
+		//         username
+		//         pets {
+		//             name           (path: "user.pets.name")
+		//             ^
+		//             ... on Cat {   (path: "user.pets")
+		//             ^          ^
+		//                 catField   (path: "user.pets.catField")
+		//                 ^
+		//             }
+		//             ... on Dog {   (path: "user.pets")
+		//             ^          ^
+		//                 dogField   (path: "user.pets.dogField")
+		//                 ^          <-- and then exit the planner
+		//             }
+		//         }
+		//     }
+		// }
+		if config.planner == visitor {
+			switch kind {
+			case astvisitor.EnterInlineFragment, astvisitor.LeaveInlineFragment:
+				if config.hasParent(path) {
+					return true
+				}
+			case astvisitor.EnterSelectionSet, astvisitor.LeaveSelectionSet:
+				if config.hasParent(path) && v.Walker.Ancestors[len(v.Walker.Ancestors)-1].Kind != ast.NodeKindField {
+					return true
+				}
+			}
+		}
 		if config.planner == visitor && config.hasPath(path) {
 			switch kind {
 			case astvisitor.EnterSelectionSet, astvisitor.LeaveSelectionSet:
