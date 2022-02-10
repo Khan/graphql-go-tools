@@ -45,7 +45,7 @@ func TestGraphQLDataSource(t *testing.T) {
 				Fetch: &resolve.SingleFetch{
 					DataSource: &Source{},
 					BufferId:   0,
-					Input:      `{"method":"POST","url":"https://swapi.com/graphql","header":{"Authorization":["$$1$$"],"Invalid-Template":["{{ request.headers.Authorization }}"]},"body":{"query":"query($id: ID!){droid(id: $id){name aliased: name friends {name} primaryFunction} hero {name} stringList nestedStringList}","variables":{"id":$$0$$}}}`,
+					Input:      `{"method":"POST","url":"https://swapi.com/graphql","header":{"Authorization":["$$1$$"],"Invalid-Template":["{{ request.headers.Authorization }}"]},"body":{"query":"query($id: ID!){droid(id: $id){name aliased: name friends {__typename ... on Human {name} ... on Droid {name}} primaryFunction} hero {__typename ... on Human {name} ... on Droid {name}} stringList nestedStringList}","variables":{"id":$$0$$}}}`,
 					Variables: resolve.NewVariables(
 						&resolve.ContextVariable{
 							Path:     []string{"id"},
@@ -109,9 +109,21 @@ func TestGraphQLDataSource(t *testing.T) {
 														Path: []string{"name"},
 													},
 													Position: resolve.Position{
-														Line:   7,
-														Column: 6,
+														Line:   0,
+														Column: 0,
 													},
+													OnTypeName: []byte("Human"),
+												},
+												{
+													Name: []byte("name"),
+													Value: &resolve.String{
+														Path: []string{"name"},
+													},
+													Position: resolve.Position{
+														Line:   0,
+														Column: 0,
+													},
+													OnTypeName: []byte("Droid"),
 												},
 											},
 										},
@@ -148,9 +160,21 @@ func TestGraphQLDataSource(t *testing.T) {
 										Path: []string{"name"},
 									},
 									Position: resolve.Position{
-										Line:   12,
-										Column: 5,
+										Line:   0,
+										Column: 0,
 									},
+									OnTypeName: []byte("Human"),
+								},
+								{
+									Name: []byte("name"),
+									Value: &resolve.String{
+										Path: []string{"name"},
+									},
+									Position: resolve.Position{
+										Line:   0,
+										Column: 0,
+									},
+									OnTypeName: []byte("Droid"),
 								},
 							},
 						},
@@ -260,7 +284,7 @@ func TestGraphQLDataSource(t *testing.T) {
 				Fetch: &resolve.SingleFetch{
 					DataSource:            &Source{},
 					BufferId:              0,
-					Input:                 `{"method":"POST","url":"https://swapi.com/graphql","body":{"query":"{user {id displayName}}"}}`,
+					Input:                 `{"method":"POST","url":"https://swapi.com/graphql","body":{"query":"{user {__typename ... on RegisteredUser {id displayName}}}"}}`,
 					DataSourceIdentifier:  []byte("graphql_datasource.Source"),
 					ProcessResponseConfig: resolve.ProcessResponseConfig{ExtractGraphqlResponse: true},
 				},
@@ -283,9 +307,10 @@ func TestGraphQLDataSource(t *testing.T) {
 										Path: []string{"id"},
 									},
 									Position: resolve.Position{
-										Line:   4,
-										Column: 5,
+										Line:   0,
+										Column: 0,
 									},
+									OnTypeName: []byte("RegisteredUser"),
 								},
 								{
 									Name: []byte("displayName"),
@@ -293,9 +318,10 @@ func TestGraphQLDataSource(t *testing.T) {
 										Path: []string{"displayName"},
 									},
 									Position: resolve.Position{
-										Line:   5,
-										Column: 5,
+										Line:   0,
+										Column: 0,
 									},
+									OnTypeName: []byte("RegisteredUser"),
 								},
 							},
 						},
@@ -345,7 +371,7 @@ func TestGraphQLDataSource(t *testing.T) {
 				Fetch: &resolve.SingleFetch{
 					DataSource:            &Source{},
 					BufferId:              0,
-					Input:                 `{"method":"POST","url":"https://swapi.com/graphql","body":{"query":"query($skip: Boolean!){user {id displayName @skip(if: $skip)}}","variables":{"skip":$$0$$}}}`,
+					Input:                 `{"method":"POST","url":"https://swapi.com/graphql","body":{"query":"query($skip: Boolean!){user {__typename ... on RegisteredUser {id displayName @skip(if: $skip)}}}","variables":{"skip":$$0$$}}}`,
 					DataSourceIdentifier:  []byte("graphql_datasource.Source"),
 					ProcessResponseConfig: resolve.ProcessResponseConfig{ExtractGraphqlResponse: true},
 					Variables: resolve.NewVariables(
@@ -374,9 +400,10 @@ func TestGraphQLDataSource(t *testing.T) {
 										Path: []string{"id"},
 									},
 									Position: resolve.Position{
-										Line:   4,
-										Column: 5,
+										Line:   0,
+										Column: 0,
 									},
+									OnTypeName: []byte("RegisteredUser"),
 								},
 								{
 									Name: []byte("displayName"),
@@ -384,11 +411,12 @@ func TestGraphQLDataSource(t *testing.T) {
 										Path: []string{"displayName"},
 									},
 									Position: resolve.Position{
-										Line:   5,
-										Column: 5,
+										Line:   0,
+										Column: 0,
 									},
 									SkipDirectiveDefined: true,
 									SkipVariableName:     "skip",
+									OnTypeName:           []byte("RegisteredUser"),
 								},
 							},
 						},
@@ -440,7 +468,7 @@ func TestGraphQLDataSource(t *testing.T) {
 				Fetch: &resolve.SingleFetch{
 					DataSource:            &Source{},
 					BufferId:              0,
-					Input:                 `{"method":"POST","url":"https://swapi.com/graphql","body":{"query":"query($skip: Boolean!){user {... @skip(if: $skip){id displayName}}}","variables":{"skip":$$0$$}}}`,
+					Input:                 `{"method":"POST","url":"https://swapi.com/graphql","body":{"query":"query($skip: Boolean!){user {__typename ... on RegisteredUser @skip(if: $skip){id displayName}}}","variables":{"skip":$$0$$}}}`,
 					DataSourceIdentifier:  []byte("graphql_datasource.Source"),
 					ProcessResponseConfig: resolve.ProcessResponseConfig{ExtractGraphqlResponse: true},
 					Variables: resolve.NewVariables(
@@ -469,11 +497,12 @@ func TestGraphQLDataSource(t *testing.T) {
 										Path: []string{"id"},
 									},
 									Position: resolve.Position{
-										Line:   5,
-										Column: 6,
+										Line:   0,
+										Column: 0,
 									},
 									SkipDirectiveDefined: true,
 									SkipVariableName:     "skip",
+									OnTypeName:           []byte("RegisteredUser"),
 								},
 								{
 									Name: []byte("displayName"),
@@ -481,11 +510,12 @@ func TestGraphQLDataSource(t *testing.T) {
 										Path: []string{"displayName"},
 									},
 									Position: resolve.Position{
-										Line:   6,
-										Column: 6,
+										Line:   0,
+										Column: 0,
 									},
 									SkipDirectiveDefined: true,
 									SkipVariableName:     "skip",
+									OnTypeName:           []byte("RegisteredUser"),
 								},
 							},
 						},
@@ -537,7 +567,7 @@ func TestGraphQLDataSource(t *testing.T) {
 				Fetch: &resolve.SingleFetch{
 					DataSource:            &Source{},
 					BufferId:              0,
-					Input:                 `{"method":"POST","url":"https://swapi.com/graphql","body":{"query":"query($include: Boolean!){user {... @include(if: $include){id displayName}}}","variables":{"include":$$0$$}}}`,
+					Input:                 `{"method":"POST","url":"https://swapi.com/graphql","body":{"query":"query($include: Boolean!){user {__typename ... on RegisteredUser @include(if: $include){id displayName}}}","variables":{"include":$$0$$}}}`,
 					DataSourceIdentifier:  []byte("graphql_datasource.Source"),
 					ProcessResponseConfig: resolve.ProcessResponseConfig{ExtractGraphqlResponse: true},
 					Variables: resolve.NewVariables(
@@ -566,11 +596,12 @@ func TestGraphQLDataSource(t *testing.T) {
 										Path: []string{"id"},
 									},
 									Position: resolve.Position{
-										Line:   5,
-										Column: 6,
+										Line:   0,
+										Column: 0,
 									},
 									IncludeDirectiveDefined: true,
 									IncludeVariableName:     "include",
+									OnTypeName:              []byte("RegisteredUser"),
 								},
 								{
 									Name: []byte("displayName"),
@@ -578,11 +609,12 @@ func TestGraphQLDataSource(t *testing.T) {
 										Path: []string{"displayName"},
 									},
 									Position: resolve.Position{
-										Line:   6,
-										Column: 6,
+										Line:   0,
+										Column: 0,
 									},
 									IncludeDirectiveDefined: true,
 									IncludeVariableName:     "include",
+									OnTypeName:              []byte("RegisteredUser"),
 								},
 							},
 						},
@@ -632,7 +664,7 @@ func TestGraphQLDataSource(t *testing.T) {
 				Fetch: &resolve.SingleFetch{
 					DataSource:            &Source{},
 					BufferId:              0,
-					Input:                 `{"method":"POST","url":"https://swapi.com/graphql","body":{"query":"{user {id}}"}}`,
+					Input:                 `{"method":"POST","url":"https://swapi.com/graphql","body":{"query":"{user {__typename ... on RegisteredUser {id}}}"}}`,
 					DataSourceIdentifier:  []byte("graphql_datasource.Source"),
 					ProcessResponseConfig: resolve.ProcessResponseConfig{ExtractGraphqlResponse: true},
 				},
@@ -655,9 +687,10 @@ func TestGraphQLDataSource(t *testing.T) {
 										Path: []string{"id"},
 									},
 									Position: resolve.Position{
-										Line:   4,
-										Column: 5,
+										Line:   0,
+										Column: 0,
 									},
+									OnTypeName: []byte("RegisteredUser"),
 								},
 							},
 						},
@@ -707,7 +740,7 @@ func TestGraphQLDataSource(t *testing.T) {
 				Fetch: &resolve.SingleFetch{
 					DataSource:            &Source{},
 					BufferId:              0,
-					Input:                 `{"method":"POST","url":"https://swapi.com/graphql","body":{"query":"{user {id displayName}}"}}`,
+					Input:                 `{"method":"POST","url":"https://swapi.com/graphql","body":{"query":"{user {__typename ... on RegisteredUser {id displayName}}}"}}`,
 					DataSourceIdentifier:  []byte("graphql_datasource.Source"),
 					ProcessResponseConfig: resolve.ProcessResponseConfig{ExtractGraphqlResponse: true},
 				},
@@ -730,9 +763,10 @@ func TestGraphQLDataSource(t *testing.T) {
 										Path: []string{"id"},
 									},
 									Position: resolve.Position{
-										Line:   4,
-										Column: 5,
+										Line:   0,
+										Column: 0,
 									},
+									OnTypeName: []byte("RegisteredUser"),
 								},
 								{
 									Name: []byte("displayName"),
@@ -740,9 +774,10 @@ func TestGraphQLDataSource(t *testing.T) {
 										Path: []string{"displayName"},
 									},
 									Position: resolve.Position{
-										Line:   5,
-										Column: 5,
+										Line:   0,
+										Column: 0,
 									},
+									OnTypeName: []byte("RegisteredUser"),
 								},
 							},
 						},
@@ -792,7 +827,7 @@ func TestGraphQLDataSource(t *testing.T) {
 				Fetch: &resolve.SingleFetch{
 					DataSource:            &Source{},
 					BufferId:              0,
-					Input:                 `{"method":"POST","url":"https://swapi.com/graphql","body":{"query":"query($include: Boolean!){user {id displayName @include(if: $include)}}","variables":{"include":$$0$$}}}`,
+					Input:                 `{"method":"POST","url":"https://swapi.com/graphql","body":{"query":"query($include: Boolean!){user {__typename ... on RegisteredUser {id displayName @include(if: $include)}}}","variables":{"include":$$0$$}}}`,
 					DataSourceIdentifier:  []byte("graphql_datasource.Source"),
 					ProcessResponseConfig: resolve.ProcessResponseConfig{ExtractGraphqlResponse: true},
 					Variables: resolve.NewVariables(
@@ -821,9 +856,10 @@ func TestGraphQLDataSource(t *testing.T) {
 										Path: []string{"id"},
 									},
 									Position: resolve.Position{
-										Line:   4,
-										Column: 5,
+										Line:   0,
+										Column: 0,
 									},
+									OnTypeName: []byte("RegisteredUser"),
 								},
 								{
 									Name: []byte("displayName"),
@@ -831,11 +867,12 @@ func TestGraphQLDataSource(t *testing.T) {
 										Path: []string{"displayName"},
 									},
 									Position: resolve.Position{
-										Line:   5,
-										Column: 5,
+										Line:   0,
+										Column: 0,
 									},
 									IncludeDirectiveDefined: true,
 									IncludeVariableName:     "include",
+									OnTypeName:              []byte("RegisteredUser"),
 								},
 							},
 						},
@@ -885,7 +922,7 @@ func TestGraphQLDataSource(t *testing.T) {
 				Fetch: &resolve.SingleFetch{
 					DataSource:            &Source{},
 					BufferId:              0,
-					Input:                 `{"method":"POST","url":"https://swapi.com/graphql","body":{"query":"{user {id displayName}}"}}`,
+					Input:                 `{"method":"POST","url":"https://swapi.com/graphql","body":{"query":"{user {__typename ... on RegisteredUser {id displayName}}}"}}`,
 					DataSourceIdentifier:  []byte("graphql_datasource.Source"),
 					ProcessResponseConfig: resolve.ProcessResponseConfig{ExtractGraphqlResponse: true},
 				},
@@ -908,9 +945,10 @@ func TestGraphQLDataSource(t *testing.T) {
 										Path: []string{"id"},
 									},
 									Position: resolve.Position{
-										Line:   4,
-										Column: 5,
+										Line:   0,
+										Column: 0,
 									},
+									OnTypeName: []byte("RegisteredUser"),
 								},
 								{
 									Name: []byte("displayName"),
@@ -918,9 +956,10 @@ func TestGraphQLDataSource(t *testing.T) {
 										Path: []string{"displayName"},
 									},
 									Position: resolve.Position{
-										Line:   5,
-										Column: 5,
+										Line:   0,
+										Column: 0,
 									},
+									OnTypeName: []byte("RegisteredUser"),
 								},
 							},
 						},
@@ -970,7 +1009,7 @@ func TestGraphQLDataSource(t *testing.T) {
 				Fetch: &resolve.SingleFetch{
 					DataSource:            &Source{},
 					BufferId:              0,
-					Input:                 `{"method":"POST","url":"https://swapi.com/graphql","body":{"query":"{user {id}}"}}`,
+					Input:                 `{"method":"POST","url":"https://swapi.com/graphql","body":{"query":"{user {__typename ... on RegisteredUser {id}}}"}}`,
 					DataSourceIdentifier:  []byte("graphql_datasource.Source"),
 					ProcessResponseConfig: resolve.ProcessResponseConfig{ExtractGraphqlResponse: true},
 				},
@@ -993,9 +1032,10 @@ func TestGraphQLDataSource(t *testing.T) {
 										Path: []string{"id"},
 									},
 									Position: resolve.Position{
-										Line:   4,
-										Column: 5,
+										Line:   0,
+										Column: 0,
 									},
+									OnTypeName: []byte("RegisteredUser"),
 								},
 							},
 						},
@@ -1032,6 +1072,8 @@ func TestGraphQLDataSource(t *testing.T) {
 		},
 		Fields: []plan.FieldConfiguration{},
 	}))
+	// Note: this test shows a case where sibling fragments *could* be combined
+	// but currently aren't.
 	t.Run("selections on interface type with object type interface", RunTest(interfaceSelectionSchema, `
 		query MyQuery {
 			user {
@@ -1048,7 +1090,7 @@ func TestGraphQLDataSource(t *testing.T) {
 				Fetch: &resolve.SingleFetch{
 					DataSource:            &Source{},
 					BufferId:              0,
-					Input:                 `{"method":"POST","url":"https://swapi.com/graphql","body":{"query":"{user {id displayName __typename ... on RegisteredUser {hasVerifiedEmail}}}"}}`,
+					Input:                 `{"method":"POST","url":"https://swapi.com/graphql","body":{"query":"{user {__typename ... on RegisteredUser {hasVerifiedEmail} ... on RegisteredUser {id displayName}}}"}}`,
 					DataSourceIdentifier:  []byte("graphql_datasource.Source"),
 					ProcessResponseConfig: resolve.ProcessResponseConfig{ExtractGraphqlResponse: true},
 				},
@@ -1066,26 +1108,6 @@ func TestGraphQLDataSource(t *testing.T) {
 							Nullable: true,
 							Fields: []*resolve.Field{
 								{
-									Name: []byte("id"),
-									Value: &resolve.String{
-										Path: []string{"id"},
-									},
-									Position: resolve.Position{
-										Line:   4,
-										Column: 5,
-									},
-								},
-								{
-									Name: []byte("displayName"),
-									Value: &resolve.String{
-										Path: []string{"displayName"},
-									},
-									Position: resolve.Position{
-										Line:   5,
-										Column: 5,
-									},
-								},
-								{
 									Name: []byte("hasVerifiedEmail"),
 									Value: &resolve.Boolean{
 										Path: []string{"hasVerifiedEmail"},
@@ -1093,6 +1115,28 @@ func TestGraphQLDataSource(t *testing.T) {
 									Position: resolve.Position{
 										Line:   7,
 										Column: 6,
+									},
+									OnTypeName: []byte("RegisteredUser"),
+								},
+								{
+									Name: []byte("id"),
+									Value: &resolve.String{
+										Path: []string{"id"},
+									},
+									Position: resolve.Position{
+										Line:   0,
+										Column: 0,
+									},
+									OnTypeName: []byte("RegisteredUser"),
+								},
+								{
+									Name: []byte("displayName"),
+									Value: &resolve.String{
+										Path: []string{"displayName"},
+									},
+									Position: resolve.Position{
+										Line:   0,
+										Column: 0,
 									},
 									OnTypeName: []byte("RegisteredUser"),
 								},
@@ -1131,104 +1175,6 @@ func TestGraphQLDataSource(t *testing.T) {
 		},
 		Fields: []plan.FieldConfiguration{},
 	}))
-	t.Run("variable at top level and recursively", RunTest(variableSchema, `
-		query MyQuery($name: String!){
-            user(name: $name){
-                normalized(data: {name: $name})
-            }
-        }
-    `, "MyQuery", &plan.SynchronousResponsePlan{
-		Response: &resolve.GraphQLResponse{
-			Data: &resolve.Object{
-				Fetch: &resolve.SingleFetch{
-					DataSource: &Source{},
-					BufferId:   0,
-					Input:      `{"method":"POST","url":"https://swapi.com/graphql","body":{"query":"query($name: String!){user(name: $name){normalized(data: {name: $name})}}","variables":{"name":$$0$$}}}`,
-					Variables: resolve.NewVariables(
-						&resolve.ContextVariable{
-							Path:     []string{"name"},
-							Renderer: resolve.NewJSONVariableRendererWithValidation(`{"type":"string"}`),
-						},
-					),
-					DataSourceIdentifier:  []byte("graphql_datasource.Source"),
-					ProcessResponseConfig: resolve.ProcessResponseConfig{ExtractGraphqlResponse: true},
-				},
-				Fields: []*resolve.Field{
-					{
-						HasBuffer: true,
-						BufferID:  0,
-						Name:      []byte("user"),
-						Position: resolve.Position{
-							Line:   3,
-							Column: 13,
-						},
-						Value: &resolve.Object{
-							Path:     []string{"user"},
-							Nullable: true,
-							Fields: []*resolve.Field{
-								{
-									Name: []byte("normalized"),
-									Value: &resolve.String{
-										Path: []string{"normalized"},
-									},
-									Position: resolve.Position{
-										Line:   4,
-										Column: 17,
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-		},
-	}, plan.Configuration{
-		DataSources: []plan.DataSourceConfiguration{
-			{
-				RootNodes: []plan.TypeField{
-					{
-						TypeName:   "Query",
-						FieldNames: []string{"user"},
-					},
-				},
-				ChildNodes: []plan.TypeField{
-					{
-						TypeName:   "User",
-						FieldNames: []string{"normalized"},
-					},
-				},
-				Factory: &Factory{},
-				Custom: ConfigJson(Configuration{
-					Fetch: FetchConfiguration{
-						URL: "https://swapi.com/graphql",
-					},
-					UpstreamSchema: variableSchema,
-				}),
-			},
-		},
-		Fields: []plan.FieldConfiguration{
-			{
-				TypeName:  "Query",
-				FieldName: "user",
-				Arguments: []plan.ArgumentConfiguration{
-					{
-						Name:       "name",
-						SourceType: plan.FieldArgumentSource,
-					},
-				},
-			},
-			{
-				TypeName:  "User",
-				FieldName: "normalized",
-				Arguments: []plan.ArgumentConfiguration{
-					{
-						Name:       "data",
-						SourceType: plan.FieldArgumentSource,
-					},
-				},
-			},
-		},
-	}))
 	t.Run("exported field", RunTest(starWarsSchemaWithExportDirective, `
 		query MyQuery($id: ID! $heroName: String!){
 			droid(id: $id){
@@ -1256,7 +1202,7 @@ func TestGraphQLDataSource(t *testing.T) {
 				Fetch: &resolve.SingleFetch{
 					DataSource: &Source{},
 					BufferId:   0,
-					Input:      `{"method":"POST","url":"https://swapi.com/graphql","header":{"Authorization":["$$2$$"],"Invalid-Template":["{{ request.headers.Authorization }}"]},"body":{"query":"query($id: ID!, $heroName: String!){droid(id: $id){name aliased: name friends {name} primaryFunction} hero {name} search(name: $heroName){__typename ... on Droid {primaryFunction}} stringList nestedStringList}","variables":{"heroName":$$1$$,"id":$$0$$}}}`,
+					Input:      `{"method":"POST","url":"https://swapi.com/graphql","header":{"Authorization":["$$2$$"],"Invalid-Template":["{{ request.headers.Authorization }}"]},"body":{"query":"query($id: ID!, $heroName: String!){droid(id: $id){name aliased: name friends {__typename ... on Human {name} ... on Droid {name}} primaryFunction} hero {__typename ... on Human {name} ... on Droid {name}} search(name: $heroName){__typename ... on Droid {primaryFunction}} stringList nestedStringList}","variables":{"heroName":$$1$$,"id":$$0$$}}}`,
 					Variables: resolve.NewVariables(
 						&resolve.ContextVariable{
 							Path:     []string{"id"},
@@ -1324,9 +1270,21 @@ func TestGraphQLDataSource(t *testing.T) {
 														Path: []string{"name"},
 													},
 													Position: resolve.Position{
-														Line:   7,
-														Column: 6,
+														Line:   0,
+														Column: 0,
 													},
+													OnTypeName: []byte("Human"),
+												},
+												{
+													Name: []byte("name"),
+													Value: &resolve.String{
+														Path: []string{"name"},
+													},
+													Position: resolve.Position{
+														Line:   0,
+														Column: 0,
+													},
+													OnTypeName: []byte("Droid"),
 												},
 											},
 										},
@@ -1367,9 +1325,25 @@ func TestGraphQLDataSource(t *testing.T) {
 										},
 									},
 									Position: resolve.Position{
-										Line:   12,
-										Column: 5,
+										Line:   0,
+										Column: 0,
 									},
+									OnTypeName: []byte("Human"),
+								},
+								{
+									Name: []byte("name"),
+									Value: &resolve.String{
+										Path: []string{"name"},
+										Export: &resolve.FieldExport{
+											Path:     []string{"heroName"},
+											AsString: true,
+										},
+									},
+									Position: resolve.Position{
+										Line:   0,
+										Column: 0,
+									},
+									OnTypeName: []byte("Droid"),
 								},
 							},
 						},
@@ -1546,7 +1520,7 @@ func TestGraphQLDataSource(t *testing.T) {
 				Fetch: &resolve.SingleFetch{
 					DataSource: &Source{},
 					BufferId:   0,
-					Input:      `{"method":"POST","url":"https://swapi.com/graphql","header":{"Authorization":["$$3$$"],"Invalid-Template":["{{ request.headers.Authorization }}"]},"body":{"query":"query($id: ID!, $input: SearchInput! @onVariable, $options: JSON)@onOperation {api_droid: droid(id: $id){name @format aliased: name friends {name} primaryFunction} api_hero: hero {name __typename ... on Human {height}} api_stringList: stringList renamed: nestedStringList api_search: search {__typename ... on Droid {primaryFunction}} api_searchWithInput: searchWithInput(input: $input){__typename ... on Droid {primaryFunction}} withOptions: searchWithInput(input: {options: $options}){__typename ... on Droid {primaryFunction}}}","variables":{"options":$$2$$,"input":$$1$$,"id":$$0$$}}}`,
+					Input:      `{"method":"POST","url":"https://swapi.com/graphql","header":{"Authorization":["$$3$$"],"Invalid-Template":["{{ request.headers.Authorization }}"]},"body":{"query":"query($id: ID!, $input: SearchInput! @onVariable, $options: JSON)@onOperation {api_droid: droid(id: $id){name @format aliased: name friends {__typename ... on Human {name} ... on Droid {name}} primaryFunction} api_hero: hero {__typename ... on Human {height} ... on Human {name} ... on Droid {name}} api_stringList: stringList renamed: nestedStringList api_search: search {__typename ... on Droid {primaryFunction}} api_searchWithInput: searchWithInput(input: $input){__typename ... on Droid {primaryFunction}} withOptions: searchWithInput(input: {options: $options}){__typename ... on Droid {primaryFunction}}}","variables":{"options":$$2$$,"input":$$1$$,"id":$$0$$}}}`,
 					Variables: resolve.NewVariables(
 						&resolve.ContextVariable{
 							Path:     []string{"id"},
@@ -1618,9 +1592,21 @@ func TestGraphQLDataSource(t *testing.T) {
 														Path: []string{"name"},
 													},
 													Position: resolve.Position{
-														Line:   7,
-														Column: 6,
+														Line:   0,
+														Column: 0,
 													},
+													OnTypeName: []byte("Human"),
+												},
+												{
+													Name: []byte("name"),
+													Value: &resolve.String{
+														Path: []string{"name"},
+													},
+													Position: resolve.Position{
+														Line:   0,
+														Column: 0,
+													},
+													OnTypeName: []byte("Droid"),
 												},
 											},
 										},
@@ -1652,16 +1638,6 @@ func TestGraphQLDataSource(t *testing.T) {
 							Nullable: true,
 							Fields: []*resolve.Field{
 								{
-									Name: []byte("name"),
-									Value: &resolve.String{
-										Path: []string{"name"},
-									},
-									Position: resolve.Position{
-										Line:   12,
-										Column: 5,
-									},
-								},
-								{
 									Name: []byte("height"),
 									Value: &resolve.String{
 										Path: []string{"height"},
@@ -1671,6 +1647,28 @@ func TestGraphQLDataSource(t *testing.T) {
 										Column: 6,
 									},
 									OnTypeName: []byte("Human"),
+								},
+								{
+									Name: []byte("name"),
+									Value: &resolve.String{
+										Path: []string{"name"},
+									},
+									Position: resolve.Position{
+										Line:   0,
+										Column: 0,
+									},
+									OnTypeName: []byte("Human"),
+								},
+								{
+									Name: []byte("name"),
+									Value: &resolve.String{
+										Path: []string{"name"},
+									},
+									Position: resolve.Position{
+										Line:   0,
+										Column: 0,
+									},
+									OnTypeName: []byte("Droid"),
 								},
 							},
 						},
@@ -2248,7 +2246,7 @@ func TestGraphQLDataSource(t *testing.T) {
 				Data: &resolve.Object{
 					Fetch: &resolve.SingleFetch{
 						BufferId:   0,
-						Input:      `{"method":"POST","url":"https://swapi.com/graphql","body":{"query":"query($birthdate: Date!){heroByBirthdate(birthdate: $birthdate){name}}","variables":{"birthdate":$$0$$}}}`,
+						Input:      `{"method":"POST","url":"https://swapi.com/graphql","body":{"query":"query($birthdate: Date!){heroByBirthdate(birthdate: $birthdate){__typename ... on Human {name} ... on Droid {name}}}","variables":{"birthdate":$$0$$}}}`,
 						DataSource: &Source{},
 						Variables: resolve.NewVariables(
 							&resolve.ContextVariable{
@@ -2273,9 +2271,22 @@ func TestGraphQLDataSource(t *testing.T) {
 											Nullable: false,
 										},
 										Position: resolve.Position{
-											Line:   4,
-											Column: 5,
+											Line:   0,
+											Column: 0,
 										},
+										OnTypeName: []byte("Human"),
+									},
+									{
+										Name: []byte("name"),
+										Value: &resolve.String{
+											Path:     []string{"name"},
+											Nullable: false,
+										},
+										Position: resolve.Position{
+											Line:   0,
+											Column: 0,
+										},
+										OnTypeName: []byte("Droid"),
 									},
 								},
 							},
@@ -5758,27 +5769,6 @@ type RegisteredUser implements User {
     displayName: String!
     isLoggedIn: Boolean!
 	hasVerifiedEmail: Boolean!
-}
-`
-
-const variableSchema = `
-
-scalar String
-
-schema {
-	query: Query
-}
-
-type Query {
-	user(name: String!): User
-}
-
-type User {
-    normalized(data: NormalizedDataInput!): String!
-}
-
-input NormalizedDataInput {
-    name: String!
 }
 `
 

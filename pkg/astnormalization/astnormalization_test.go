@@ -16,7 +16,6 @@ import (
 )
 
 func TestNormalizeOperation(t *testing.T) {
-
 	run := func(t *testing.T, definition, operation, expectedOutput, variablesInput, expectedVariables string) {
 		t.Helper()
 
@@ -327,7 +326,6 @@ schema {
 }
 
 func BenchmarkAstNormalization(b *testing.B) {
-
 	definition := unsafeparser.ParseGraphqlDocumentString(testDefinition)
 	operation := unsafeparser.ParseGraphqlDocumentString(testOperation)
 	report := operationreport.Report{}
@@ -350,10 +348,12 @@ var mustString = func(str string, err error) string {
 	return str
 }
 
-type registerNormalizeFunc func(walker *astvisitor.Walker)
-type registerNormalizeVariablesFunc func(walker *astvisitor.Walker) *variablesExtractionVisitor
-type registerNormalizeVariablesDefaulValueFunc func(walker *astvisitor.Walker) *variablesDefaultValueExtractionVisitor
-type registerNormalizeDeleteVariablesFunc func(walker *astvisitor.Walker) *deleteUnusedVariablesVisitor
+type (
+	registerNormalizeFunc                     func(walker *astvisitor.Walker)
+	registerNormalizeVariablesFunc            func(walker *astvisitor.Walker) *variablesExtractionVisitor
+	registerNormalizeVariablesDefaulValueFunc func(walker *astvisitor.Walker) *variablesDefaultValueExtractionVisitor
+	registerNormalizeDeleteVariablesFunc      func(walker *astvisitor.Walker) *deleteUnusedVariablesVisitor
+)
 
 var runWithVariablesAssert = func(t *testing.T, registerVisitor func(walker *astvisitor.Walker), definition, operation, operationName, expectedOutput, variablesInput, expectedVariables string, additionalNormalizers ...registerNormalizeFunc) {
 	t.Helper()
@@ -424,7 +424,6 @@ var runWithDeleteUnusedVariables = func(t *testing.T, normalizeFunc registerNorm
 }
 
 var run = func(normalizeFunc registerNormalizeFunc, definition, operation, expectedOutput string) {
-
 	definitionDocument := unsafeparser.ParseGraphqlDocumentString(definition)
 	err := asttransform.MergeDefinitionWithBaseSchema(&definitionDocument)
 	if err != nil {
@@ -453,7 +452,7 @@ var run = func(normalizeFunc registerNormalizeFunc, definition, operation, expec
 }
 
 func runMany(definition, operation, expectedOutput string, normalizeFuncs ...registerNormalizeFunc) {
-	var runManyNormalizers = func(walker *astvisitor.Walker) {
+	runManyNormalizers := func(walker *astvisitor.Walker) {
 		for _, normalizeFunc := range normalizeFuncs {
 			normalizeFunc(walker)
 		}

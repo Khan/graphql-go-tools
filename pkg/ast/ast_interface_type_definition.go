@@ -118,6 +118,17 @@ func (d *Document) InterfaceTypeDefinitionImplementedByRootNodes(ref int) []Node
 	return nodes
 }
 
+func (d *Document) ConcreteInterfaceImplementationTypeNames(ref int) []string {
+	var typeNames []string
+	for _, node := range d.InterfaceTypeDefinitionImplementedByRootNodes(ref) {
+		if node.Kind != NodeKindObjectTypeDefinition {
+			continue
+		}
+		typeNames = append(typeNames, node.NameString(d))
+	}
+	return typeNames
+}
+
 func (d *Document) AddInterfaceTypeDefinition(definition InterfaceTypeDefinition) (ref int) {
 	d.InterfaceTypeDefinitions = append(d.InterfaceTypeDefinitions, definition)
 	return len(d.InterfaceTypeDefinitions) - 1

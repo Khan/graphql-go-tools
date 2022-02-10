@@ -30,6 +30,22 @@ type (
 		ReplaceFragmentSpread(selectionSet int, spreadRef int, replaceWithSelectionSet int)
 		// ReplaceFragmentSpreadWithInlineFragment marks a fragment spread to be replaces with an inline fragment
 		ReplaceFragmentSpreadWithInlineFragment(selectionSet int, spreadRef int, replaceWithSelectionSet int, typeCondition ast.TypeCondition)
+		// ExpandInterfaceInlineFragment is used to replace an inline fragment
+		// that has an interface type condition with corresponding inline
+		// fragments that have concrete type conditions. The caller is expected
+		// to pass in the appropriate concrete type names.
+		ExpandInterfaceInlineFragment(inlineFragment int, parentSelectionSet int, concreteTypeNames []string)
+		// PromoteUnionInlineFragments replaces an inline fragment that has a
+		// union a type condition with its child selections. The child
+		// selections within a union type are required to be fragments, so this
+		// transformation can be described and "promoting" the child selections
+		// to level of the original fragment.
+		PromoteUnionInlineFragments(inlineFragment int, parentSelectionSet int)
+		// ExpandInterfaceSelectionSet is used to replace the fields in a
+		// selection set that has an interface enclosing type with inline
+		// fragments that selection the same fields on the corresponding
+		// concrete types that implement the interface.
+		ExpandInterfaceSelectionSet(selectionSet int, concreteTypeNames []string)
 	}
 	transformation interface {
 		apply(transformable Transformable)
@@ -56,7 +72,6 @@ func (t *Transformer) Reset() {
 
 // ApplyTransformations applies all registered transformations to a transformable
 func (t *Transformer) ApplyTransformations(transformable Transformable) {
-
 	sort.Slice(t.actions, func(i, j int) bool {
 		if t.actions[i].precedence.Depth != t.actions[j].precedence.Depth {
 			return t.actions[i].precedence.Depth > t.actions[j].precedence.Depth
@@ -121,6 +136,27 @@ func (t *Transformer) ReplaceFragmentSpreadWithInlineFragment(precedence Precede
 	})
 }
 
+func (t *Transformer) ExpandInterfaceInlineFragment(precedence Precedence, inlineFragment int, parentSelectionSet int, concreteTypeNames []string) {
+	t.actions = append(t.actions, action{
+		precedence: precedence,
+		transformation: expandInterfaceInlineFragment{
+			inlineFragment:     inlineFragment,
+			parentSelectionSet: parentSelectionSet,
+			concreteTypeNames:  concreteTypeNames,
+		},
+	})
+}
+
+func (t *Transformer) PromoteUnionInlineFragments(precedence Precedence, inlineFragment int, parentSelectionSet int) {
+	t.actions = append(t.actions, action{
+		precedence: precedence,
+		transformation: promoteUnionInlineFragments{
+			inlineFragment:     inlineFragment,
+			parentSelectionSet: parentSelectionSet,
+		},
+	})
+}
+
 type replaceFragmentSpread struct {
 	selectionSet            int
 	spreadRef               int
@@ -129,6 +165,25 @@ type replaceFragmentSpread struct {
 
 func (r replaceFragmentSpread) apply(transformable Transformable) {
 	transformable.ReplaceFragmentSpread(r.selectionSet, r.spreadRef, r.replaceWithSelectionSet)
+}
+
+type expandInterfaceInlineFragment struct {
+	inlineFragment     int
+	parentSelectionSet int
+	concreteTypeNames  []string
+}
+
+func (e expandInterfaceInlineFragment) apply(transformable Transformable) {
+	transformable.ExpandInterfaceInlineFragment(e.inlineFragment, e.parentSelectionSet, e.concreteTypeNames)
+}
+
+type promoteUnionInlineFragments struct {
+	inlineFragment     int
+	parentSelectionSet int
+}
+
+func (p promoteUnionInlineFragments) apply(transformable Transformable) {
+	transformable.PromoteUnionInlineFragments(p.inlineFragment, p.parentSelectionSet)
 }
 
 type replaceFragmentSpreadWithInlineFragment struct {
@@ -140,6 +195,25 @@ type replaceFragmentSpreadWithInlineFragment struct {
 
 func (r replaceFragmentSpreadWithInlineFragment) apply(transformable Transformable) {
 	transformable.ReplaceFragmentSpreadWithInlineFragment(r.selectionSet, r.spreadRef, r.replaceWithSelectionSet, r.typeCondition)
+}
+
+func (t *Transformer) ExpandInterfaceSelectionSet(precedence Precedence, selectionSet int, concreteTypeNames []string) {
+	t.actions = append(t.actions, action{
+		precedence: precedence,
+		transformation: expandInterfaceSelectionSet{
+			selectionSet:      selectionSet,
+			concreteTypeNames: concreteTypeNames,
+		},
+	})
+}
+
+type expandInterfaceSelectionSet struct {
+	selectionSet      int
+	concreteTypeNames []string
+}
+
+func (e expandInterfaceSelectionSet) apply(transformable Transformable) {
+	transformable.ExpandInterfaceSelectionSet(e.selectionSet, e.concreteTypeNames)
 }
 
 type deleteRootNode struct {

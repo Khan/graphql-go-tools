@@ -53,4 +53,26 @@ func TestResolveInlineFragments(t *testing.T) {
 						}
 					}`)
 	})
+	t.Run("sibling fragments", func(t *testing.T) {
+		t.Skip("nice to have, but not strictly necessary")
+		run(mergeInlineFragments, testDefinition, `
+					query testQuery {
+						pet {
+							... on Dog {
+								name
+							}
+							... on Dog {
+								name
+							}
+						}
+					}`,
+			`
+					query testQuery {
+						pet {
+							... on Dog {
+								name
+							}
+						}
+					}`)
+	})
 }

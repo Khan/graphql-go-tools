@@ -604,17 +604,6 @@ func TestHttpJsonDataSourcePlanner_Plan(t *testing.T) {
 											},
 										},
 										{
-											Name: []byte("name"),
-											Value: &Value{
-												DataResolvingConfig: DataResolvingConfig{
-													PathSelector: datasource.PathSelector{
-														Path: "name",
-													},
-												},
-												ValueType: StringValueType,
-											},
-										},
-										{
 											Name: []byte("successField"),
 											Skip: &IfNotEqual{
 												Left: &datasource.ObjectVariableArgument{
@@ -656,6 +645,48 @@ func TestHttpJsonDataSourcePlanner_Plan(t *testing.T) {
 												ValueType: StringValueType,
 											},
 										},
+										{
+											Name: []byte("name"),
+											Skip: &IfNotEqual{
+												Left: &datasource.ObjectVariableArgument{
+													PathSelector: datasource.PathSelector{
+														Path: "__typename",
+													},
+												},
+												Right: &datasource.StaticVariableArgument{
+													Value: []byte("SuccessInterface"),
+												},
+											},
+											Value: &Value{
+												DataResolvingConfig: DataResolvingConfig{
+													PathSelector: datasource.PathSelector{
+														Path: "name",
+													},
+												},
+												ValueType: StringValueType,
+											},
+										},
+										{
+											Name: []byte("name"),
+											Skip: &IfNotEqual{
+												Left: &datasource.ObjectVariableArgument{
+													PathSelector: datasource.PathSelector{
+														Path: "__typename",
+													},
+												},
+												Right: &datasource.StaticVariableArgument{
+													Value: []byte("ErrorInterface"),
+												},
+											},
+											Value: &Value{
+												DataResolvingConfig: DataResolvingConfig{
+													PathSelector: datasource.PathSelector{
+														Path: "name",
+													},
+												},
+												ValueType: StringValueType,
+											},
+										},
 									},
 								},
 							},
@@ -668,7 +699,6 @@ func TestHttpJsonDataSourcePlanner_Plan(t *testing.T) {
 }
 
 func TestHttpJsonDataSource_Resolve(t *testing.T) {
-
 	test := func(serverStatusCode int, typeNameDefinition, wantTypeName string) func(t *testing.T) {
 		return func(t *testing.T) {
 			fakeServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
